@@ -1,0 +1,226 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: sans-serif;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #1c1c2b, #362d4d);
+  background-size: cover;
+  background-blend-mode: overlay;
+  min-height: 100vh;
+  width: 100vw;
+  margin: 0;
+  overflow: hidden;
+}
+
+.main,
+.left-sidebar,
+.right-sidebar {
+  height: 100vh;
+  border: 2px solid rgba(255, 215, 0, 0.2);
+  box-shadow: inset 0 0 12px rgba(255, 215, 0, 0.15), 0 0 8px rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(6px);
+  border-radius: 12px;
+}
+
+.main {
+  width: 45%;
+}
+
+.left-sidebar,
+.right-sidebar {
+
+  flex: 1;
+
+}
+
+.left-sidebar,
+.main,
+.right-sidebar {
+  color: gold;
+
+}
+
+.left-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.right-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  padding: 24px;
+  color: gold;
+  font-family: 'Georgia', serif;
+  border-left: 2px solid gold;
+  box-shadow: inset 0 0 10px rgba(255, 215, 0, 0.2);
+  gap: 18px;
+}
+.main h1 {
+  font-size: 30px;
+}
+
+.right-sidebar h2, .main h2, .right-sidebar h1, .main h1 {
+  font-size: 26px;
+  margin: 0;
+  color: #ffd700;
+  text-shadow: 1px 1px 2px black;
+}
+
+.right-sidebar h2, .main h2 {
+  font-size: 26px;
+}
+
+.right-sidebar h5,
+.right-sidebar h6 {
+  margin: 0;
+  font-size: 19px;
+  color: #fefefe;
+}
+
+.btn {
+  margin-top: 8px;
+  padding: 8px 16px;
+  background: linear-gradient(to bottom, #444, #222);
+  border: 1px solid gold;
+  color: gold;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn:hover {
+  background: #111;
+  box-shadow: 0 0 6px gold;
+}
+
+
+
+.main {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+h2,
+h5 {
+  margin: 0
+}
+
+
+
+@import url('https://fonts.googleapis.com/css2?family=UnifrakturCook:wght@700&display=swap');
+
+#notification-container {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.notification {
+  font-family: 'UnifrakturCook', cursive;
+  font-size: 22px;
+  color: white;
+  padding: 12px 24px;
+  margin: 6px 0;
+  border-radius: 8px;
+  min-width: 240px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(-20px) scale(0.95);
+  animation: pop-in 0.4s forwards, fade-out 0.4s ease-in 2.4s forwards;
+  box-shadow: 0 0 12px rgba(0,0,0,0.5);
+  backdrop-filter: blur(3px);
+}
+
+.notification.green {
+  background: linear-gradient(to right, #28a745, #218838);
+  box-shadow: 0 0 12px #28a745;
+}
+
+.notification.red {
+  background: linear-gradient(to right, #dc3545, #a71d2a);
+  box-shadow: 0 0 12px #dc3545;
+}
+
+.notification.yellow {
+  background: linear-gradient(to right, #f8d32f, #e0b800);
+  box-shadow: 0 0 12px #f8d32f;
+  color: #222;
+}
+
+@keyframes pop-in {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+}
+
+#confirmation-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+#confirmation-box {
+  background: linear-gradient(to right, #222, #111);
+  border: 2px solid gold;
+  border-radius: 10px;
+  padding: 20px 30px;
+  color: white;
+  font-family: 'UnifrakturCook', cursive;
+  text-align: center;
+  box-shadow: 0 0 18px gold;
+  max-width: 360px;
+}
+
+.confirmation-buttons {
+  margin-top: 18px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.confirmation-buttons button {
+  padding: 6px 16px;
+  background: gold;
+  color: black;
+  font-weight: bold;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.confirmation-buttons button:hover {
+  background: orange;
+}
+
