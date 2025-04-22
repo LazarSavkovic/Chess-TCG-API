@@ -101,7 +101,7 @@ def game(ws, game_id):
                         '2': len(game.decks['2']),
                     },
                     'center_tile_control': game.center_tile_control,
-                     'username': incoming_username,
+                    'username': incoming_username,
                     'user_id': user_id,
                     'user_assignments': user_assignments[game_id]
 
