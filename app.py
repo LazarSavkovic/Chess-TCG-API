@@ -326,6 +326,8 @@ def game(ws, game_id):
             elif data['type'] == 'direct-attack':
                 pos = data['pos']
                 success, info, game_over = game.direct_attack(pos, user_id)
+                x, y = pos
+                card = game.board[x][y]
                 serialized_board = [[p.to_dict() if p else None for p in row] for row in game.board]
                 serialized_land_board = [[p.to_dict() if p else None for p in row] for row in game.land_board]
 
@@ -378,6 +380,7 @@ def game(ws, game_id):
                                     },
                             'turn': game.current_player,
                             'success': success,
+                            'card': card.to_dict(),
                             'mana': game.mana,
                             'info': info,
                             'moves_left': game.max_moves_per_turn - game.moves_this_turn,
@@ -419,7 +422,7 @@ def game(ws, game_id):
                         },
                         'moves_left': game.max_moves_per_turn - game.moves_this_turn,
                         'center_tile_control': game.center_tile_control,
-                    'usernames': user_assignments[game_id]
+                        'usernames': user_assignments[game_id]
 
                     }))
                 else:
@@ -456,7 +459,44 @@ def game(ws, game_id):
                                 },
                                 'moves_left': game.max_moves_per_turn - game.moves_this_turn,
                                 'center_tile_control': game.center_tile_control,
-                    'usernames': user_assignments[game_id]
+                                'usernames': user_assignments[game_id]
+
+                            }))
+
+
+                    elif callable(getattr(card, "requires_deck_tutoring", None)) and card.requires_deck_tutoring():
+
+                        # 👇 Regular activate logic
+                        success, info = True, f'{card.name} activated'
+                        valid_tutoring_targets = card.get_valid_tutoring_targets(game, user_id)
+                        serialized_board = [[p.to_dict() if p else None for p in row] for row in game.board]
+                        serialized_land_board = [[p.to_dict() if p else None for p in row] for row in game.land_board]
+
+
+                        connected_users[game_id][user_id].send(json.dumps({
+                                'type': 'awaiting-deck-tutoring',
+                                'board': serialized_board,
+                                'land_board': serialized_land_board,
+                                'hand1': [c.to_dict() for c in game.hands['1']],
+                                'hand2': [c.to_dict() for c in game.hands['2']],
+                                'turn': game.current_player,
+                                'slot': slot,
+                                'success': success,
+                                'valid_tutoring_targets': [c.to_dict() for c in valid_tutoring_targets],
+                                'card_id': card.card_id,
+                                'graveyard': {
+                                    '1': [c.to_dict() for c in game.graveyard['1']],
+                                    '2': [c.to_dict() for c in game.graveyard['2']],
+                                },
+                                'mana': game.mana,
+                                'info': info,
+                                'deck_sizes': {
+                                    '1': len(game.decks['1']),
+                                    '2': len(game.decks['2']),
+                                },
+                                'moves_left': game.max_moves_per_turn - game.moves_this_turn,
+                                'center_tile_control': game.center_tile_control,
+                                'usernames': user_assignments[game_id]
 
                             }))
                     else:
@@ -492,10 +532,10 @@ def game(ws, game_id):
 
             elif data['type'] == 'resolve-sorcery':
                     slot = data['slot']
-                    target = data['target']
                     card = game.hands[user_id][slot]
 
                     if hasattr(card, "resolve_with_input"):
+                        target = data['target']
                         # 👇 Try resolving first — don't remove card or spend mana yet
                         success, info = card.resolve_with_input(game, user_id, target)
 
@@ -529,10 +569,50 @@ def game(ws, game_id):
                                 'info': info,
                                 'moves_left': game.max_moves_per_turn - game.moves_this_turn,
                                 'center_tile_control': game.center_tile_control,
-                    'usernames': user_assignments[game_id]
-
+                                'usernames': user_assignments[game_id]
 
                             }))
+
+                    elif hasattr(card, "resolve_with_tutoring_input"):
+                        card_id = data['card_id']
+                        # 👇 Try resolving first — don't remove card or spend mana yet
+                        success, info = card.resolve_with_tutoring_input(card_id, game, user_id)
+
+                        if success:
+                            game.hands[user_id].pop(slot)
+                            game.graveyard[user_id].append(card)
+                            game.mana[user_id] -= card.mana
+                            game.sorcery_used_this_turn.add(user_id)
+
+                        serialized_board = [[p.to_dict() if p else None for p in row] for row in game.board]
+                        serialized_land_board = [[p.to_dict() if p else None for p in row] for row in game.land_board]
+
+                        for ws_conn in connected_users[game_id].values():
+                            ws_conn.send(json.dumps({
+                                'type': 'update',
+                                'board': serialized_board,
+                                'land_board': serialized_land_board,
+                                'hand1': [c.to_dict() for c in game.hands['1']],
+                                'hand2': [c.to_dict() for c in game.hands['2']],
+                                'turn': game.current_player,
+                                'success': success,
+                                'mana': game.mana,
+                                'graveyard': {
+                                    '1': [c.to_dict() for c in game.graveyard['1']],
+                                    '2': [c.to_dict() for c in game.graveyard['2']],
+                                },
+                                'deck_sizes': {
+                                    '1': len(game.decks['1']),
+                                    '2': len(game.decks['2']),
+                                },
+                                'info': info,
+                                'moves_left': game.max_moves_per_turn - game.moves_this_turn,
+                                'center_tile_control': game.center_tile_control,
+                                'usernames': user_assignments[game_id]
+
+                            }))
+
+
             elif data['type'] == 'place-land':
                 if not user_id:
                     continue  # or raise, or wait — don't access hands/cards yet

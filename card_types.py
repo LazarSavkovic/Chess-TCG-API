@@ -170,7 +170,7 @@ def satisfies_need(game, x, y, direction, owner):
     if isinstance(target_card, Monster):
         for direction in target_card.movement:
             range_val = target_card.movement[direction]
-            if range_val != 1 and range_val != 'any':
+            if range_val != 1 and range_val != 2 and range_val != 'any':
                 continue  # skip longer range moves
 
             offset = get_direction_offset(direction, target_card.owner)

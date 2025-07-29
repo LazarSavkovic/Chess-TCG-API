@@ -27,10 +27,10 @@ class Bonecrawler(Monster):  # Formerly: Pawn
 class ShadowVine(Monster):  # Formerly: DiagonalRanger
     name = "Shadow Vine"
     movement = {
-        "forward": 'any',
-        "forward-left": 'any',
-        "back-right": 'any',
-        # "back-right": 'any'
+        "forward": 2,
+        "forward-left": 2,
+        "back-right": 2,
+        # "back-right": 2
     }
     original_attack = 200
     original_defense = 200
@@ -49,14 +49,14 @@ class ShadowVine(Monster):  # Formerly: DiagonalRanger
 class DreadmawQueen(Monster):  # Formerly: Queen
     name = "Dreadmaw Queen"
     movement = {
-        "forward": 'any',
-        "forward-left": 'any',
-        # "forward-right": 'any',
-        "right": 'any',
-        "back-left": 'any',
-        # "left": 'any',
-        # "back-right": 'any',
-        "back": 'any'
+        "forward": 2,
+        "forward-left": 2,
+        # "forward-right": 2,
+        "right": 2,
+        "back-left": 2,
+        # "left": 2,
+        # "back-right": 2,
+        "back": 2
     }
     original_attack = 170
     original_defense = 130
@@ -74,7 +74,7 @@ class DreadmawQueen(Monster):  # Formerly: Queen
 class FrostRevenant(Monster):
     name = "Frost Revenant"
     movement = {
-        "forward": 'any',
+        "forward": 2,
         "back-left": 1,
         "back": 1
     }
@@ -95,10 +95,10 @@ class FrostRevenant(Monster):
 class SolarPaladin(Monster):
     name = "Solar Paladin"
     movement = {
-        "forward": 'any',
-        "back": 'any',
-        "back-left": 'any',
-        "right": 'any'
+        "forward": 2,
+        "back": 2,
+        "back-left": 2,
+        "right": 2
     }
 
     original_attack = 230
@@ -142,8 +142,8 @@ class Magistra(Monster):
     name = "Magistra"
     movement = {
         "forward": 1,
-        "left": 'any',
-        "right": 'any',
+        "left": 2,
+        "right": 2,
         "back-left": 1,
         "back-right": 1
     }
@@ -166,11 +166,11 @@ class Magistra(Monster):
 class LordOfTheAbyss(Monster):
     name = "Lord of the Abyss"
     movement = {
-        "forward": 'any',
+        "forward": 2,
         "left": 1,
         "right": 1,
-        "back-left": 'any',
-        "back-right": 'any',
+        "back-left": 2,
+        "back-right": 2,
         'back': 1
     }
     original_attack = 220
@@ -190,7 +190,7 @@ class LordOfTheAbyss(Monster):
 class Stormcaller(Monster):
     name = "Stormcaller"
     movement = {
-        "forward-right": 'any',
+        "forward-right": 2,
         "left": 1,
         "right": 1,
         "back-left": 1,
@@ -214,7 +214,7 @@ class Stormcaller(Monster):
 class WingsOfTheShatteredSkies(Monster):
     name = "Wings of the Shattered Skies"
     movement = {
-        'forward': 'any',
+        'forward': 2,
         "forward-right": 1,
         "forward-left": 1,
         "back-left": 1,
@@ -238,7 +238,7 @@ class WingsOfTheShatteredSkies(Monster):
 class AbyssalLeviathan(Monster):
     name = "Abyssal Leviathan"
     movement = {
-        "forward": 'any',
+        "forward": 2,
         "back": 1,
         "left": 1,
         "right": 1
@@ -260,8 +260,8 @@ class AbyssalLeviathan(Monster):
 class BloodthornReaper(Monster):
     name = "Bloodthorn Reaper"
     movement = {
-        "forward-left": 'any',
-        "forward-right": 'any',
+        "forward-left": 2,
+        "forward-right": 2,
         "back-left": 1,
         "back-right": 1
     }
@@ -281,10 +281,10 @@ class BloodthornReaper(Monster):
 class CelestialTitan(Monster):
     name = "Celestial Titan"
     movement = {
-        "forward": 'any',
-        "left": 'any',
-        "right": 'any',
-        "back": 'any'
+        "forward": 2,
+        "left": 2,
+        "right": 2,
+        "back": 2
     }
     original_attack = 200
     original_defense = 250
@@ -383,6 +383,114 @@ class ArcaneTempest(Sorcery):
                     card.attack -= 40
 
 
+
+
+class SilentRecruiter(Sorcery):
+    name = "Silent Recruiter"
+    text = "Choose monster with attack lower or equal to 180 from deck and add to hand."
+    activation_needs = ['back']
+
+    def __init__(self, owner):
+        super().__init__(
+            card_id="silent_recruiter",
+            owner=owner,
+            image="/static/cards/silent_recruiter.png",
+            mana=2
+        )
+
+    def requires_deck_tutoring(self):
+        return True
+
+    def get_valid_tutoring_targets(self, game, user_id):
+        target_deck = game.decks[self.owner]
+        valid_targets = []
+        for card in target_deck:
+            if card.type == 'monster':
+                if card.attack <= 180:
+                    valid_targets.append(card)
+        return valid_targets
+
+    def resolve_with_tutoring_input(self, card_id, game, user_id):
+        valid_targets = self.get_valid_tutoring_targets(game, user_id)
+        for card in valid_targets:
+            if card.id == card_id:
+                # Remove from deck and add to hand
+                game.decks[self.owner].remove(card)
+                game.hands[self.owner].append(card)
+                return True, f'{card.name} was added to your hand by {self.name}.'
+        return False, 'Invalid target for Silent Recruiter.'
+
+
+
+
+class OneMoreTrick(Sorcery):
+    name = "One More Trick"
+    text = "Choose a sorcery from deck and add to hand."
+    activation_needs = ['forward']
+
+    def __init__(self, owner):
+        super().__init__(
+            card_id="one_more_trick",
+            owner=owner,
+            image="/static/cards/one_more_trick.png",
+            mana=3
+        )
+
+    def requires_deck_tutoring(self):
+        return True
+
+    def get_valid_tutoring_targets(self, game, user_id):
+        target_deck = game.decks[self.owner]
+        valid_targets = []
+        for card in target_deck:
+            if card.type == 'sorcery':
+                valid_targets.append(card)
+        return valid_targets
+
+    def resolve_with_tutoring_input(self, card_id, game, user_id):
+        valid_targets = self.get_valid_tutoring_targets(game, user_id)
+        for card in valid_targets:
+            if card.id == card_id:
+                # Remove from deck and add to hand
+                game.decks[self.owner].remove(card)
+                game.hands[self.owner].append(card)
+                return True, f'{card.name} was added to your hand by {self.name}.'
+        return False, 'Invalid target for Silent Recruiter.'
+
+
+class WanderersCompass(Sorcery):
+    name = "Wanderer's Compass"
+    text = "Choose a land from deck and add to hand."
+    activation_needs = ['left']
+
+    def __init__(self, owner):
+        super().__init__(
+            card_id="wanderers_compass",
+            owner=owner,
+            image="/static/cards/wanderers_compass.png",
+            mana=2
+        )
+
+    def requires_deck_tutoring(self):
+        return True
+
+    def get_valid_tutoring_targets(self, game, user_id):
+        target_deck = game.decks[self.owner]
+        valid_targets = []
+        for card in target_deck:
+            if card.type == 'land':
+                valid_targets.append(card)
+        return valid_targets
+
+    def resolve_with_tutoring_input(self, card_id, game, user_id):
+        valid_targets = self.get_valid_tutoring_targets(game, user_id)
+        for card in valid_targets:
+            if card.id == card_id:
+                # Remove from deck and add to hand
+                game.decks[self.owner].remove(card)
+                game.hands[self.owner].append(card)
+                return True, f'{card.name} was added to your hand by {self.name}.'
+        return False, 'Invalid target for Silent Recruiter.'
 
 
 class TargetedDestruction(Sorcery):

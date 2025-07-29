@@ -1,7 +1,7 @@
 
 from card_types import Monster
 from random import shuffle, choice
-from util import  get_playable_card_classes
+from util import get_playable_card_classes
 
 class ChessGame:
     def __init__(self):
@@ -27,6 +27,11 @@ class ChessGame:
             '1': [choice(all_card_classes)('1') for _ in range(40)],
             '2': [choice(all_card_classes)('2') for _ in range(40)]
         }
+
+        # self.decks = {
+        #     '1': [choice(all_card_classes)('1') for _ in range(24)] + [SilentRecruiter('1') for _ in range(10)] + [OneMoreTrick('1') for _ in range(10)] + [WanderersCompass('1') for _ in range(10)],
+        #     '2': [choice(all_card_classes)('2') for _ in range(24)] + [SilentRecruiter('2') for _ in range(10)] + [OneMoreTrick('2') for _ in range(10)] + [WanderersCompass('2') for _ in range(10)],
+        # }
 
         shuffle(self.decks['1'])
         shuffle(self.decks['2'])
