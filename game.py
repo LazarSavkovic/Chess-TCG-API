@@ -1,5 +1,5 @@
 
-from card_types import Monster
+from card_types import Monster, Sorcery, Land
 from random import shuffle, choice
 from util import get_playable_card_classes
 
@@ -21,11 +21,20 @@ class ChessGame:
             '2': 0
         }
 
+        # Separate card classes
         all_card_classes = get_playable_card_classes()
+        monster_sorcery_classes = [cls for cls in all_card_classes if not issubclass(cls, Land)]
+        land_classes = [cls for cls in all_card_classes if issubclass(cls, Land)]
 
+        # Build decks
         self.decks = {
-            '1': [choice(all_card_classes)('1') for _ in range(40)],
-            '2': [choice(all_card_classes)('2') for _ in range(40)]
+            '1': [choice(monster_sorcery_classes)('1') for _ in range(40)],
+            '2': [choice(monster_sorcery_classes)('2') for _ in range(40)]
+        }
+
+        self.land_decks = {
+            '1': [choice(land_classes)('1') for _ in range(15)],
+            '2': [choice(land_classes)('2') for _ in range(15)]
         }
 
         # self.decks = {
@@ -274,11 +283,11 @@ class ChessGame:
         if user_id in self.land_placed_this_turn:
             return False, "You've already created a land this turn"
 
-        hand = self.hands[user_id]
-        if not (0 <= slot_index < len(hand)):
+        land_deck = self.land_decks[user_id]
+        if not (0 <= slot_index < len(land_deck)):
             return False, "Invalid card slot"
 
-        card = hand[slot_index]
+        card = land_deck[slot_index]
         if card.type != 'land':
             return False, "Not a land card"
 
@@ -303,11 +312,11 @@ class ChessGame:
     def place_land(self, slot_index, user_id, to_pos):
         x, y = to_pos
 
-        hand = self.hands[user_id]
-        card = hand[slot_index]
+        land_deck = self.land_decks[user_id]
+        card = land_deck[slot_index]
 
         self.land_placed_this_turn.add(user_id)
         self.mana[user_id] -= card.mana
-        hand.pop(slot_index)
+        land_deck.pop(slot_index)
         self.land_board[x][y] = card
         return True, f"{card.name} placed as land"

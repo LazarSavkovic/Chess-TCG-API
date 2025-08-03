@@ -3,6 +3,7 @@ import uuid
 
 class Card:
     name = "Default Card"
+    role = 'default role'
     def __init__(self, card_type, card_id, owner, image='', mana=0):
         self.id = str(uuid.uuid4())      # unique instance ID
         self.card_id = card_id           # shared ID for this card type
@@ -14,6 +15,7 @@ class Card:
     def to_dict(self):
         return {
             'name': self.name,
+            'role': self.role,
             'id': self.id,
             'card_id': self.card_id,
             'type': self.type,

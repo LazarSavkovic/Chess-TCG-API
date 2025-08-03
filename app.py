@@ -100,6 +100,11 @@ def game(ws, game_id):
                         '1': len(game.decks['1']),
                         '2': len(game.decks['2']),
                     },
+                            'land_decks': {
+
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                     'center_tile_control': game.center_tile_control,
                     'username': incoming_username,
                     'user_id': user_id,
@@ -131,6 +136,11 @@ def game(ws, game_id):
                             'graveyard': {
                                 '1': [c.to_dict() for c in game.graveyard['1']],
                                 '2': [c.to_dict() for c in game.graveyard['2']],
+                            },
+                            'land_decks': {
+                                
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
                             },
                             'deck_sizes': {
                                 '1': len(game.decks['1']),
@@ -190,6 +200,11 @@ def game(ws, game_id):
                                 '1': [c.to_dict() for c in game.graveyard['1']],
                                 '2': [c.to_dict() for c in game.graveyard['2']],
                             },
+                            'land_decks': {
+                                
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                             'deck_sizes': {
                                 '1': len(game.decks['1']),
                                 '2': len(game.decks['2']),
@@ -216,6 +231,11 @@ def game(ws, game_id):
                             'graveyard': {
                                 '1': [c.to_dict() for c in game.graveyard['1']],
                                 '2': [c.to_dict() for c in game.graveyard['2']],
+                            },
+                            'land_decks': {
+                                
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
                             },
                             'deck_sizes': {
                                 '1': len(game.decks['1']),
@@ -246,10 +266,16 @@ def game(ws, game_id):
                             'land_board': serialized_land_board,
                             'mana': game.mana,
                             'hand1': [c.to_dict() for c in game.hands['1']],
+                            'hand2': [c.to_dict() for c in game.hands['2']], 'hand1': [c.to_dict() for c in game.hands['1']],
                             'hand2': [c.to_dict() for c in game.hands['2']],
                             'graveyard': {
                                 '1': [c.to_dict() for c in game.graveyard['1']],
                                 '2': [c.to_dict() for c in game.graveyard['2']],
+                            },
+                            'land_decks': {
+                                
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
                             },
                             'deck_sizes': {
                                     '1': len(game.decks['1']),
@@ -279,12 +305,18 @@ def game(ws, game_id):
                             'board': serialized_board,
                             'land_board': serialized_land_board,
                             'hand1': [c.to_dict() for c in game.hands['1']],
+                            'hand2': [c.to_dict() for c in game.hands['2']], 'hand1': [c.to_dict() for c in game.hands['1']],
                             'hand2': [c.to_dict() for c in game.hands['2']],
                             'turn': game.current_player,
                             'success': success,
                             'graveyard': {
                                 '1': [c.to_dict() for c in game.graveyard['1']],
                                 '2': [c.to_dict() for c in game.graveyard['2']],
+                            },
+                            'land_decks': {
+                                
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
                             },
                             'deck_sizes': {
                                 '1': len(game.decks['1']),
@@ -345,6 +377,11 @@ def game(ws, game_id):
                                 '1': [c.to_dict() for c in game.graveyard['1']],
                                 '2': [c.to_dict() for c in game.graveyard['2']],
                             },
+                            'land_decks': {
+                                
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                             'deck_sizes': {
                                 '1': len(game.decks['1']),
                                 '2': len(game.decks['2']),
@@ -373,6 +410,11 @@ def game(ws, game_id):
                             'graveyard': {
                                 '1': [c.to_dict() for c in game.graveyard['1']],
                                 '2': [c.to_dict() for c in game.graveyard['2']],
+                            },
+                            'land_decks': {
+                                
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
                             },
                             'deck_sizes': {
                                         '1': len(game.decks['1']),
@@ -414,6 +456,11 @@ def game(ws, game_id):
                             '1': [c.to_dict() for c in game.graveyard['1']],
                             '2': [c.to_dict() for c in game.graveyard['2']],
                         },
+                            'land_decks': {
+
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                         'mana': game.mana,
                         'info': info,
                         'deck_sizes': {
@@ -451,6 +498,11 @@ def game(ws, game_id):
                                     '1': [c.to_dict() for c in game.graveyard['1']],
                                     '2': [c.to_dict() for c in game.graveyard['2']],
                                 },
+                            'land_decks': {
+
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                                 'mana': game.mana,
                                 'info': info,
                                 'deck_sizes': {
@@ -488,6 +540,11 @@ def game(ws, game_id):
                                     '1': [c.to_dict() for c in game.graveyard['1']],
                                     '2': [c.to_dict() for c in game.graveyard['2']],
                                 },
+                            'land_decks': {
+
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                                 'mana': game.mana,
                                 'info': info,
                                 'deck_sizes': {
@@ -518,6 +575,11 @@ def game(ws, game_id):
                                     '1': [c.to_dict() for c in game.graveyard['1']],
                                     '2': [c.to_dict() for c in game.graveyard['2']],
                                 },
+                            'land_decks': {
+
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                                 'mana': game.mana,
                                 'info': info,
                                 'deck_sizes': {
@@ -562,6 +624,11 @@ def game(ws, game_id):
                                     '1': [c.to_dict() for c in game.graveyard['1']],
                                     '2': [c.to_dict() for c in game.graveyard['2']],
                                 },
+                            'land_decks': {
+
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                                 'deck_sizes': {
                                     '1': len(game.decks['1']),
                                     '2': len(game.decks['2']),
@@ -601,6 +668,11 @@ def game(ws, game_id):
                                     '1': [c.to_dict() for c in game.graveyard['1']],
                                     '2': [c.to_dict() for c in game.graveyard['2']],
                                 },
+                            'land_decks': {
+
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                                 'deck_sizes': {
                                     '1': len(game.decks['1']),
                                     '2': len(game.decks['2']),
@@ -614,12 +686,13 @@ def game(ws, game_id):
 
 
             elif data['type'] == 'place-land':
+                print(data)
                 if not user_id:
                     continue  # or raise, or wait — don't access hands/cards yet
 
                 slot = data['slot']
                 target = data.get('pos')  # optional
-                card = game.hands[user_id][slot]
+                card = game.land_decks[user_id][slot]
 
                 # 👇 Regular placement logic
                 success, info = game.game_can_place_land(slot, user_id, target)
@@ -640,6 +713,11 @@ def game(ws, game_id):
                             '1': [c.to_dict() for c in game.graveyard['1']],
                             '2': [c.to_dict() for c in game.graveyard['2']],
                         },
+                            'land_decks': {
+
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                         'mana': game.mana,
                         'info': info,
                         'deck_sizes': {
@@ -670,6 +748,11 @@ def game(ws, game_id):
                             'graveyard': {
                                 '1': [c.to_dict() for c in game.graveyard['1']],
                                 '2': [c.to_dict() for c in game.graveyard['2']],
+                            },
+                            'land_decks': {
+                                
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
                             },
                             'mana': game.mana,
                             'info': info,
@@ -713,6 +796,11 @@ def game(ws, game_id):
                                     '1': [c.to_dict() for c in game.graveyard['1']],
                                     '2': [c.to_dict() for c in game.graveyard['2']],
                                 },
+                            'land_decks': {
+
+                                '1': [c.to_dict() for c in game.land_decks['1']],
+                                '2': [c.to_dict() for c in game.land_decks['2']],
+                            },
                                 'deck_sizes': {
                                     '1': len(game.decks['1']),
                                     '2': len(game.decks['2']),
