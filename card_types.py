@@ -104,11 +104,6 @@ class Sorcery(Card):
         super().__init__('sorcery', card_id, owner, image, mana)
 
 
-    def can_activate(self, game, x, y):
-        for direction in self.activation_needs:
-            if not satisfies_need(game, x, y, direction, self.owner):
-                return False
-        return True
 
     def affect_board(self, game, user_id):
         """
@@ -130,11 +125,6 @@ class Land(Card):
     def __init__(self, card_id, owner, image='', mana=0):
         super().__init__('land', card_id, owner, image, mana)
 
-    def can_create(self, game, x, y):
-        for direction in self.creation_needs:
-            if not satisfies_need(game, x, y, direction, self.owner):
-                return False
-        return True
 
     def affect_board(self, game, user_id):
         """
@@ -158,42 +148,64 @@ class Land(Card):
         base['effect'] = self.__class__.__name__  # optional, for display
         return base
 
-def satisfies_need(game, x, y, direction, owner):
+def satisfies_need(game, x, y, direction, owner, required_role=None):
+    print(required_role, 'req role')
     dx, dy = get_direction_offset(direction, owner)
     tx, ty = x + dx, y + dy
 
-
     if not (0 <= tx < len(game.board) and 0 <= ty < len(game.board[0])):
-        return False
+        return 0
 
-    # --- Check the tile in the required direction ---
+    # --- Check the tile in the required direction on monster board ---
     target_card = game.board[tx][ty]
-
     if isinstance(target_card, Monster):
-        for direction in target_card.movement:
-            range_val = target_card.movement[direction]
-            if range_val != 1 and range_val != 2 and range_val != 'any':
-                continue  # skip longer range moves
+        for dir in target_card.movement:
+            range_val = target_card.movement[dir]
+            if range_val not in (1, 2, 'any'):
+                continue
 
-            offset = get_direction_offset(direction, target_card.owner)
+            offset = get_direction_offset(dir, target_card.owner)
             if offset is None:
                 continue
             nx, ny = offset
-            if [tx + nx, ty + ny] == [x,y]:
-                return True
+            if [tx + nx, ty + ny] == [x, y]:
+                print(target_card.role)
+                if required_role and getattr(target_card, "role", None) == required_role:
 
+                    return 2
+                return 1
+
+    # --- Check the land board in the same direction ---
     target_card = game.land_board[tx][ty]
-
     if isinstance(target_card, Land):
-        for direction in target_card.creation_needs:
-            offset = get_direction_offset(direction, target_card.owner)
+        for dir in target_card.creation_needs:
+            offset = get_direction_offset(dir, target_card.owner)
             if offset is None:
                 continue
             nx, ny = offset
-            if [tx + nx, ty + ny] == [x,y]:
-                return True
+            if [tx + nx, ty + ny] == [x, y]:
+                if required_role and getattr(target_card, "role", None) == required_role:
+                    return 2
+                return 1
 
-    return False
+    return 0
+
+
+def evaluate_creation_or_activation_needs(card, game, x, y):
+    needs = getattr(card, "activation_needs", None) if card.type == "sorcery" else getattr(card, "creation_needs", None)
+    if not needs:
+        return 2  # No needs? Always playable for free
+
+
+    results = [satisfies_need(game, x, y, direction, card.owner, required_role=getattr(card, "role", None)) for direction in needs]
+    print(results, "results")
+    if all(r == 2 for r in results):
+        return 2  # All match and same role → free
+    elif all(r >= 1 for r in results):
+        return 1  # All satisfied but not all match → paid
+    else:
+        return 0  # At least one not satisfied → blocked
+
 
 
 def get_direction_offset(direction, owner=None):

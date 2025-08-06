@@ -2,6 +2,7 @@
 from card_types import Monster, Sorcery, Land
 from random import shuffle, choice
 from util import get_playable_card_classes
+from card_types import evaluate_creation_or_activation_needs
 
 class ChessGame:
     def __init__(self):
@@ -237,37 +238,55 @@ class ChessGame:
         self.moves_this_turn += 1
         return True, "Move successful"
 
-    def game_can_activate_card(self,slot_index, user_id, target_pos):
+    def game_can_activate_card(self, slot_index, user_id, target_pos):
+        print('slot', slot_index, user_id, target_pos)
+        print('here game_can_activate_card')
         if user_id != self.current_player:
-            return False, "Not your turn"
+            return False, "Not your turn", False
 
         if user_id in self.sorcery_used_this_turn:
-            return False, "You've already used a sorcery this turn"
+            return False, "You've already used a sorcery this turn", False
 
         hand = self.hands[user_id]
         if not (0 <= slot_index < len(hand)):
-            return False, "Invalid card slot"
+            return False, "Invalid card slot", False
 
         card = hand[slot_index]
+        print(card.name)
         if card.type != 'sorcery':
-            return False, "This is not a sorcery"
+            return False, "This is not a sorcery", False
 
         if self.mana[user_id] < card.mana:
-            return False, "Not enough mana"
+            return False, "Not enough mana", False
 
         if target_pos is None:
-            return False, "No activation position provided"
+            return False, "No activation position provided", False
 
-        if not card.can_activate(self, target_pos[0], target_pos[1]):
-            return False, "Activation needs not met"
-        return True, 'Card can be activated'
+        activation_status = evaluate_creation_or_activation_needs(card, self, target_pos[0], target_pos[1])
+        print(activation_status, 'act status')
 
+        if activation_status == 0:
+            return False, "Activation needs not met", False
 
-    def activate_sorcery(self, slot_index, user_id, target_pos):
+        elif activation_status == 1:
+            mana_available = self.mana.get(user_id, 0)
+            if mana_available < card.mana:
+                return False, "Not enough mana", False
+            return True, "Card can be activated", False
+
+        elif activation_status == 2:
+            return True, "Card can be activated for free", True
+
+        # Optional fallback
+        return False, "Unknown activation status", False
+
+    def activate_sorcery(self, slot_index, user_id, target_pos, reduce_mana=True):
         hand = self.hands[user_id]
         card = hand[slot_index]
 
-        self.mana[user_id] -= card.mana
+        if reduce_mana:
+            self.mana[user_id] -= card.mana
+
         hand.pop(slot_index)
         self.graveyard[user_id].append(card)
         self.sorcery_used_this_turn.add(user_id)
@@ -278,45 +297,48 @@ class ChessGame:
 
     def game_can_place_land(self, slot_index, user_id, to_pos):
         if user_id != self.current_player:
-            return False, "Not your turn"
+            return False, "Not your turn", False
 
         if user_id in self.land_placed_this_turn:
-            return False, "You've already created a land this turn"
+            return False, "You've already created a land this turn", False
 
         land_deck = self.land_decks[user_id]
         if not (0 <= slot_index < len(land_deck)):
-            return False, "Invalid card slot"
+            return False, "Invalid card slot", False
 
         card = land_deck[slot_index]
         if card.type != 'land':
-            return False, "Not a land card"
-
-        if self.mana[user_id] < card.mana:
-            return False, "Not enough mana"
+            return False, "Not a land card", False
 
         x, y = to_pos
         if self.land_board[x][y] is not None:
-            return False, "Land already exists here"
+            return False, "Land already exists here", False
 
-        x, y = to_pos
         if self.board[x][y] is not None:
-            return False, "Tile is occupied"
+            return False, "Tile is occupied", False
 
-        # Optional: Check card.creation_needs like sorceries do
-        if hasattr(card, "creation_needs") and not card.can_create(self, x, y):
-            return False, "Creation needs not met"
+        activation_status = evaluate_creation_or_activation_needs(card, self, x, y)
 
-        return True, 'Land can be placed'
+        if activation_status == 0:
+            return False, "Activation needs not met", False
+        elif activation_status == 1 and self.mana[user_id] < card.mana:
+            return False, "Not enough mana", False
 
+        # Success — return third value indicating if it's free
+        return True, "Card can be activated for free" if activation_status == 2 else "Card can be activated", activation_status == 2
 
-    def place_land(self, slot_index, user_id, to_pos):
+    def place_land(self, slot_index, user_id, to_pos, reduce_mana=True):
         x, y = to_pos
 
         land_deck = self.land_decks[user_id]
         card = land_deck[slot_index]
 
         self.land_placed_this_turn.add(user_id)
-        self.mana[user_id] -= card.mana
+        if reduce_mana:
+            self.mana[user_id] -= card.mana
+
         land_deck.pop(slot_index)
         self.land_board[x][y] = card
+
         return True, f"{card.name} placed as land"
+

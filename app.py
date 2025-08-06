@@ -436,9 +436,10 @@ def game(ws, game_id):
                     continue  # or raise, or wait — don't access hands/cards yet
 
                 slot = data['slot']
-                target = data.get('pos')  # optional
+                pos = data.get('pos')  # optional
                 card = game.hands[user_id][slot]
-                success, info = game.game_can_activate_card(slot, user_id, target)
+                success, info, is_free = game.game_can_activate_card(slot, user_id, pos)
+                print(data)
                 if not success:
 
                     serialized_board = [[p.to_dict() if p else None for p in row] for row in game.board]
@@ -452,6 +453,7 @@ def game(ws, game_id):
                         'hand2': [c.to_dict() for c in game.hands['2']],
                         'turn': game.current_player,
                         'success': success,
+                        'pos': pos,
                         'graveyard': {
                             '1': [c.to_dict() for c in game.graveyard['1']],
                             '2': [c.to_dict() for c in game.graveyard['2']],
@@ -494,6 +496,7 @@ def game(ws, game_id):
                                 'success': success,
                                 'valid_targets': valid_targets,
                                 'card_id': card.card_id,
+                            'pos': pos,
                                 'graveyard': {
                                     '1': [c.to_dict() for c in game.graveyard['1']],
                                     '2': [c.to_dict() for c in game.graveyard['2']],
@@ -558,7 +561,7 @@ def game(ws, game_id):
                             }))
                     else:
                         # 👇 Regular activate logic
-                        success, info = game.activate_sorcery(slot, user_id, target)
+                        success, info = game.activate_sorcery(slot, user_id, pos, reduce_mana=not is_free)
                         serialized_board = [[p.to_dict() if p else None for p in row] for row in game.board]
 
 
@@ -595,6 +598,9 @@ def game(ws, game_id):
             elif data['type'] == 'resolve-sorcery':
                     slot = data['slot']
                     card = game.hands[user_id][slot]
+                    pos = data.get('pos')  # optional
+                    success, info, is_free = game.game_can_activate_card(slot, user_id, pos)
+                    print(is_free, "is free")
 
                     if hasattr(card, "resolve_with_input"):
                         target = data['target']
@@ -604,7 +610,8 @@ def game(ws, game_id):
                         if success:
                             game.hands[user_id].pop(slot)
                             game.graveyard[user_id].append(card)
-                            game.mana[user_id] -= card.mana
+                            if not is_free:
+                                game.mana[user_id] -= card.mana
                             game.sorcery_used_this_turn.add(user_id)
 
                         serialized_board = [[p.to_dict() if p else None for p in row] for row in game.board]
@@ -691,11 +698,11 @@ def game(ws, game_id):
                     continue  # or raise, or wait — don't access hands/cards yet
 
                 slot = data['slot']
-                target = data.get('pos')  # optional
+                pos = data.get('pos')  # optional
                 card = game.land_decks[user_id][slot]
 
                 # 👇 Regular placement logic
-                success, info = game.game_can_place_land(slot, user_id, target)
+                success, info, is_free = game.game_can_place_land(slot, user_id, pos)
                 if not success:
                     serialized_board = [[p.to_dict() if p else None for p in row] for row in game.board]
                     serialized_land_board = [[p.to_dict() if p else None for p in row] for row in game.land_board]
@@ -720,6 +727,7 @@ def game(ws, game_id):
                             },
                         'mana': game.mana,
                         'info': info,
+                        'pos': pos,
                         'deck_sizes': {
                             '1': len(game.decks['1']),
                             '2': len(game.decks['2']),
@@ -732,7 +740,7 @@ def game(ws, game_id):
                 else:
 
 
-                    success, info = game.place_land(slot, user_id, target)
+                    success, info = game.place_land(slot, user_id, target, reduce_mana=not is_free)
                     serialized_board = [[p.to_dict() if p else None for p in row] for row in game.board]
                     serialized_land_board = [[p.to_dict() if p else None for p in row] for row in game.land_board]
 
@@ -771,6 +779,8 @@ def game(ws, game_id):
                     target = data['target']
                     card = game.hands[user_id][slot]
 
+                    success, info, is_free = game.game_can_place_land(slot, user_id, target)
+
                     if hasattr(card, "resolve_with_input"):
                         # 👇 Try resolving first — don't remove card or spend mana yet
                         success, info = card.resolve_with_input(game, user_id, target)
@@ -778,7 +788,8 @@ def game(ws, game_id):
                         if success:
                             game.hands[user_id].pop(slot)
                             game.graveyard[user_id].append(card)
-                            game.mana[user_id] -= card.mana
+                            if not is_free:
+                                game.mana[user_id] -= card.mana
 
                         serialized_board = [[p.to_dict() if p else None for p in row] for row in game.board]
                         serialized_land_board = [[p.to_dict() if p else None for p in row] for row in game.land_board]
@@ -809,8 +820,6 @@ def game(ws, game_id):
                                 'moves_left': game.max_moves_per_turn - game.moves_this_turn,
                                 'center_tile_control': game.center_tile_control,
                     'usernames': user_assignments[game_id]
-
-
                             }))
 
     except Exception as e:

@@ -334,7 +334,7 @@ class BlazingRain(Sorcery):
 class NaturesResurgence(Sorcery):
     name = 'Natures Resurgence'
     text = 'Increase the DEF of your monsters by 30.'
-    activation_needs = ["forward", "forward-right"]
+    activation_needs = [ "forward-right"]
     role = "sentinel"
     def __init__(self, owner):
         super().__init__('natures_resurgence', owner, image='/static/cards/natures_resurgence.png', mana=1)
@@ -609,7 +609,7 @@ class FrostbiteCurse(Sorcery):
 class MindSeize(Sorcery):
     name = "Mind Seize"
     text = "Choose an enemy monster to take control of it."
-    activation_needs = ['back', 'back-right']
+    activation_needs = ['back']
     role = "manipulator"
     def __init__(self, owner):
         super().__init__(
@@ -642,7 +642,7 @@ class MindSeize(Sorcery):
 class PowerSurge(Sorcery):
     name = "Power Surge"
     text = "Choose a monster to double its ATK and DEF."
-    activation_needs = ['forward', 'left']
+    activation_needs = ['forward']
     role = "aggressor"
     def __init__(self, owner):
         super().__init__(
@@ -675,7 +675,7 @@ class PowerSurge(Sorcery):
 class VolcanicRift(Land):
     name = "Volcanic Rift"
     text = "Burns an opponent's monster for 50 DEF when it steps on this tile."
-    creation_needs = ["forward", 'back']
+    creation_needs = ["forward"]
     role = "aggressor"
     def __init__(self, owner):
         super().__init__('volcanic_rift', owner, image='/static/cards/volcanic_rift.png', mana=1)
@@ -705,7 +705,7 @@ class SacredGrove(Land):
 class FrozenBarrier(Land):
     name = "Frozen Barrier"
     text = "Opponent's monsters cannot move across this tile."
-    creation_needs = ["back-right", 'forward']
+    creation_needs = ["right", 'forward']
     role = "sentinel"
     def __init__(self, owner):
         super().__init__('frozen_barrier', owner, image='/static/cards/frozen_barrier.png', mana=1)
@@ -751,7 +751,7 @@ class WastelandMine(Land):
 class RuleOfTheMeek(Land):
     name = "Rule of the Meek"
     text = "Opponent's monsters with ATK or DEF over 150 cannot move across this tile."
-    creation_needs = ["forward-right", 'right']
+    creation_needs = ["forward-right"]
     role = "sentinel"
     def __init__(self, owner):
         super().__init__('rule_of_the_meek', owner, image='/static/cards/rule_of_the_meek.png', mana=1)
