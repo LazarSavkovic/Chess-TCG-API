@@ -3,9 +3,11 @@ from flask_sock import Sock
 import json
 import uuid
 from game import ChessGame
+from flask_cors import CORS
 
 
 app = Flask(__name__)
+CORS(app)
 sock = Sock(app)
 
 
@@ -15,7 +17,7 @@ games = {}
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return "Welcome to Chess TCG API"
 
 @app.route('/create-room')
 def create_room():
@@ -740,7 +742,7 @@ def game(ws, game_id):
                 else:
 
 
-                    success, info = game.place_land(slot, user_id, target, reduce_mana=not is_free)
+                    success, info = game.place_land(slot, user_id, pos, reduce_mana=not is_free)
                     serialized_board = [[p.to_dict() if p else None for p in row] for row in game.board]
                     serialized_land_board = [[p.to_dict() if p else None for p in row] for row in game.land_board]
 
@@ -752,6 +754,7 @@ def game(ws, game_id):
                             'hand1': [c.to_dict() for c in game.hands['1']],
                             'hand2': [c.to_dict() for c in game.hands['2']],
                             'turn': game.current_player,
+                            'pos': pos,
                             'success': success,
                             'graveyard': {
                                 '1': [c.to_dict() for c in game.graveyard['1']],
