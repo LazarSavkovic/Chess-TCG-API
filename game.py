@@ -1,7 +1,7 @@
 
 from card_types import Monster, Sorcery, Land
 from random import shuffle, choice
-from util import get_playable_card_classes
+from util import get_playable_card_classes, build_capped_deck
 from card_types import evaluate_creation_or_activation_needs
 
 class ChessGame:
@@ -27,15 +27,16 @@ class ChessGame:
         monster_sorcery_classes = [cls for cls in all_card_classes if not issubclass(cls, Land)]
         land_classes = [cls for cls in all_card_classes if issubclass(cls, Land)]
 
-        # Build decks
+        # Build decks (40 cards, max 3 of each)
         self.decks = {
-            '1': [choice(monster_sorcery_classes)('1') for _ in range(40)],
-            '2': [choice(monster_sorcery_classes)('2') for _ in range(40)]
+            '1': build_capped_deck(monster_sorcery_classes, '1', 40, max_copies=3),
+            '2': build_capped_deck(monster_sorcery_classes, '2', 40, max_copies=3),
         }
 
+        # Build land decks (15 cards, max 3 of each)
         self.land_decks = {
-            '1': [choice(land_classes)('1') for _ in range(15)],
-            '2': [choice(land_classes)('2') for _ in range(15)]
+            '1': build_capped_deck(land_classes, '1', 15, max_copies=3),
+            '2': build_capped_deck(land_classes, '2', 15, max_copies=3),
         }
 
         # self.decks = {

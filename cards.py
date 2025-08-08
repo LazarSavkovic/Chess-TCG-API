@@ -473,7 +473,7 @@ class OneMoreTrick(Sorcery):
 
 class WanderersCompass(Sorcery):
     name = "Wanderer's Compass"
-    text = "Choose a land from deck and add to hand."
+    text = "Choose a walker sorcerer from deck and add to hand."
     activation_needs = ['left']
     role = "walker"
     def __init__(self, owner):
@@ -491,7 +491,7 @@ class WanderersCompass(Sorcery):
         target_deck = game.decks[self.owner]
         valid_targets = []
         for card in target_deck:
-            if card.type == 'land':
+            if card.type == 'sorcery' and card.role == 'walker':
                 valid_targets.append(card)
         return valid_targets
 
