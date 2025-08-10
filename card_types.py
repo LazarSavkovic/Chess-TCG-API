@@ -159,6 +159,12 @@ def satisfies_need(game, x, y, direction, owner, required_role=None):
     # --- Check the tile in the required direction on monster board ---
     target_card = game.board[tx][ty]
     if isinstance(target_card, Monster):
+
+        # ✅ Only count your own lands
+        if target_card.owner != owner:
+            return 0
+
+
         for dir in target_card.movement:
             range_val = target_card.movement[dir]
             if range_val not in (1, 2, 'any'):
@@ -178,6 +184,11 @@ def satisfies_need(game, x, y, direction, owner, required_role=None):
     # --- Check the land board in the same direction ---
     target_card = game.land_board[tx][ty]
     if isinstance(target_card, Land):
+
+        # ✅ Only count your own lands
+        if target_card.owner != owner:
+            return 0
+
         for dir in target_card.creation_needs:
             offset = get_direction_offset(dir, target_card.owner)
             if offset is None:

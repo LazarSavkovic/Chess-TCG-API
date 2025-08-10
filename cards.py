@@ -7,10 +7,10 @@ from card_types import Monster, Sorcery, Land
 class Bonecrawler(Monster):  # Formerly: Pawn
     name = "Bonecrawler"
     movement = {
-        "forward": 1,
-        'left': 1,
-        'right': 1,
-        'back': 1
+        "forward": 2,
+        'left': 2,
+        'right': 2,
+        'back': 2
     }
     role = "walker"
     original_attack = 100
@@ -23,7 +23,7 @@ class Bonecrawler(Monster):  # Formerly: Pawn
             attack=self.original_attack,
             defense=self.original_defense,
             image='/static/cards/bonecrawler.png',
-            mana=1
+            mana=2
         )
 
 #
@@ -100,10 +100,10 @@ class FrostRevenant(Monster):
 class SolarPaladin(Monster):
     name = "Solar Paladin"
     movement = {
-        "forward": 2,
-        "back": 2,
-        "back-left": 2,
-        "right": 2
+        "forward": 1,
+        "back": 1,
+        "back-left": 1,
+        "right": 1
     }
 
     original_attack = 230
@@ -171,12 +171,11 @@ class Magistra(Monster):
 class LordOfTheAbyss(Monster):
     name = "Lord of the Abyss"
     movement = {
-        "forward": 2,
+        "forward": 1,
         "left": 1,
         "right": 1,
-        "back-left": 2,
-        "back-right": 2,
-        'back': 1
+        "back-left": 1,
+        "back-right": 1
     }
     role = "breaker"
     original_attack = 220
@@ -197,8 +196,6 @@ class Stormcaller(Monster):
     name = "Stormcaller"
     movement = {
         "forward-right": 2,
-        "left": 1,
-        "right": 1,
         "back-left": 1,
         "back-right": 1
     }
@@ -270,8 +267,7 @@ class BloodthornReaper(Monster):
     movement = {
         "forward-left": 2,
         "forward-right": 2,
-        "back-left": 1,
-        "back-right": 1
+        "back": 1
     }
     role = "breaker"
     original_attack = 190
@@ -291,9 +287,9 @@ class CelestialTitan(Monster):
     name = "Celestial Titan"
     movement = {
         "forward": 2,
-        "left": 2,
-        "right": 2,
-        "back": 2
+        "left": 1,
+        "right": 1,
+        "back": 1
     }
     original_attack = 200
     original_defense = 250
@@ -305,7 +301,7 @@ class CelestialTitan(Monster):
             attack=self.original_attack,
             defense=self.original_defense,
             image='/static/cards/celestial_titan.png',
-            mana=6
+            mana=5
         )
 
 
@@ -714,6 +710,31 @@ class FrozenBarrier(Land):
         if monster.owner != self.owner:
             return True
         return False
+
+
+
+# class WearyTravellersInn(Land):
+#     name = "Weary Travellers Inn"
+#     text = "When your monster lands on this tile, you gain one more move."
+#     creation_needs = ["right", 'forward']
+#     role = "walker"
+#     def __init__(self, owner):
+#         super().__init__('weary_travellers_inn', owner, image='/static/cards/weary_travellers_inn.png', mana=1)
+#
+#     def on_enter(self, game, pos, monster):
+#         # Only grant to the tile's owner
+#         if monster.owner != self.owner:
+#             return
+#
+#         # Ensure a per-turn tracker exists on the game
+#         if not hasattr(game, "_bonus_move_granted"):
+#             game._bonus_move_granted = set()
+#
+#         # Grant at most once per player per turn
+#         if monster.owner not in game._bonus_move_granted:
+#             game._bonus_move_granted.add(monster.owner)
+#             # Give one extra move for the rest of THIS turn
+#             game.max_moves_per_turn += 1
 
 
 class StormNexus(Land):

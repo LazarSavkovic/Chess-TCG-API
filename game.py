@@ -49,8 +49,8 @@ class ChessGame:
 
         # Initial hands = draw 3 cards from the deck
         self.hands = {
-            '1': [self.decks['1'].pop() for _ in range(4)],
-            '2': [self.decks['2'].pop() for _ in range(4)]
+            '1': [self.decks['1'].pop() for _ in range(5)],
+            '2': [self.decks['2'].pop() for _ in range(5)]
         }
         self.summoned_this_turn = set()
         self.sorcery_used_this_turn = set()
