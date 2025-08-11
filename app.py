@@ -215,7 +215,7 @@ def game(ws, game_id):
                         return msg_type, extra
                     _broadcast_per_viewer(game_id, builder)
 
-                elif game.center_tile_control[user_id] >= 6:
+                elif game.center_tile_control[user_id] >= 7:
                     # This player wins (same payload fields as before)
                     def builder(uid, game_):
                         extra = {
