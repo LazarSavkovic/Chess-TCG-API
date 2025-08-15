@@ -58,8 +58,8 @@ class ChessGame:
 
     @staticmethod
     def get_valid_summon_positions(user_id):
-        r = 0 if user_id == '2' else 6
-        return [[r, col] for col in [0, 3, 6]]
+        r = 0 if user_id == '2' else 5
+        return [[r, col] for col in range(6)]
 
     def draw_card(self, user_id):
         if self.decks[user_id]:
@@ -70,6 +70,7 @@ class ChessGame:
             return False, "Not your turn"
         if user_id in self.summoned_this_turn:
             return False, "You've already summoned this turn"
+        print(to_pos)
 
         if to_pos not in self.get_valid_summon_positions(user_id):
             return False, "Invalid summon position"
@@ -91,7 +92,7 @@ class ChessGame:
         return True, f"{card.name} summoned!"
 
     def init_board(self):
-        board = [[None for _ in range(7)] for _ in range(7)]
+        board = [[None for _ in range(6)] for _ in range(6)]
 
         return board
 
@@ -105,21 +106,6 @@ class ChessGame:
         return self.players[self.turn_index]
 
     def toggle_turn(self):
-        # 👇 Initialize if missing
-        if not hasattr(self, 'center_tile_control'):
-            self.center_tile_control = {'1': 0, '2': 0}
-
-        center_piece = self.board[3][3]
-        if center_piece:
-            owner = center_piece.owner
-            other = '1' if owner == '2' else '2'
-
-            self.center_tile_control[owner] += 1
-            self.center_tile_control[other] = 0  # reset opponent's control
-        else:
-            # No one controls center
-            self.center_tile_control['1'] = 0
-            self.center_tile_control['2'] = 0
 
         self.turn_index = (self.turn_index + 1) % len(self.players)
         self.moves_this_turn = 0

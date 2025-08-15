@@ -12,7 +12,7 @@ class Bonecrawler(Monster):  # Formerly: Pawn
         'right': 2,
         'back': 2
     }
-    role = "walker"
+    role = "blue"
     original_attack = 100
     original_defense = 200
 
@@ -35,7 +35,7 @@ class ShadowVine(Monster):  # Formerly: DiagonalRanger
         "back-right": 2,
         "back-left": 2
     }
-    role = "walker"
+    role = "blue"
     original_attack = 200
     original_defense = 200
 
@@ -62,7 +62,7 @@ class DreadmawQueen(Monster):  # Formerly: Queen
         "back-right": 2,
         "back": 2
     }
-    role = "walker"
+    role = "blue"
     original_attack = 170
     original_defense = 130
 
@@ -85,7 +85,7 @@ class FrostRevenant(Monster):
     }
     original_attack = 170
     original_defense = 190
-    role = "sentinel"
+    role = "white"
     def __init__(self, owner):
         super().__init__(
             card_id='frost_revenant',
@@ -108,7 +108,7 @@ class SolarPaladin(Monster):
 
     original_attack = 230
     original_defense = 130
-    role = "aggressor"
+    role = "red"
     def __init__(self, owner):
         super().__init__(
             card_id='solar_paladin',
@@ -127,7 +127,7 @@ class SylvanArcher(Monster):
         "back-left": 1,
         "back-right": 1
     }
-    role = "manipulator"
+    role = "blue"
     original_attack = 130
     original_defense = 200
 
@@ -152,7 +152,7 @@ class Magistra(Monster):
         "back-left": 1,
         "back-right": 1
     }
-    role = "manipulator"
+    role = "white"
     original_attack = 170
     original_defense = 190
 
@@ -177,7 +177,7 @@ class LordOfTheAbyss(Monster):
         "back-left": 1,
         "back-right": 1
     }
-    role = "breaker"
+    role = "black"
     original_attack = 220
     original_defense = 200
 
@@ -199,7 +199,7 @@ class Stormcaller(Monster):
         "back-left": 1,
         "back-right": 1
     }
-    role = "manipulator"
+    role = "black"
     original_attack = 170
     original_defense = 190
 
@@ -224,7 +224,7 @@ class WingsOfTheShatteredSkies(Monster):
         "back-left": 1,
         "back-right": 1
     }
-    role = "walker"
+    role = "blue"
     original_attack = 150
     original_defense = 170
 
@@ -247,7 +247,7 @@ class AbyssalLeviathan(Monster):
         "left": 1,
         "right": 1
     }
-    role = "walker"
+    role = "blue"
     original_attack = 250
     original_defense = 150
 
@@ -269,7 +269,7 @@ class BloodthornReaper(Monster):
         "forward-right": 2,
         "back": 1
     }
-    role = "breaker"
+    role = "black"
     original_attack = 190
     original_defense = 140
 
@@ -293,7 +293,7 @@ class CelestialTitan(Monster):
     }
     original_attack = 200
     original_defense = 250
-    role = "aggressor"
+    role = "red"
     def __init__(self, owner):
         super().__init__(
             card_id='celestial_titan',
@@ -312,7 +312,7 @@ class BlazingRain(Sorcery):
     name = 'Blazing Rain'
     text = "Weaken all opponent's DEF by 50."
     activation_needs = ["back"]
-    role = "aggressor"
+    role = "red"
     def __init__(self, owner):
         super().__init__('blazing_rain', owner, image='/static/cards/blazing_rain.png', mana=3)
 
@@ -331,7 +331,7 @@ class NaturesResurgence(Sorcery):
     name = 'Natures Resurgence'
     text = 'Increase the DEF of your monsters by 30.'
     activation_needs = [ "forward-right"]
-    role = "sentinel"
+    role = "white"
     def __init__(self, owner):
         super().__init__('natures_resurgence', owner, image='/static/cards/natures_resurgence.png', mana=1)
 
@@ -346,7 +346,7 @@ class MysticDraw(Sorcery):
     name = 'Mystic Draw'
     text = 'Draw 2 cards.'
     activation_needs = ["left", "back"]
-    role = "manipulator"
+    role = "blue"
     def __init__(self, owner):
         super().__init__('mystic_draw', owner, image='/static/cards/mystic_draw.png', mana=2)
 
@@ -360,7 +360,7 @@ class DivineReset(Sorcery):
     name = 'Divine Reset'
     text = 'Destroy all monsters on the field.'
     activation_needs = ['left', 'right']
-    role = "breaker"
+    role = "black"
     def __init__(self, owner):
         super().__init__(
             card_id='divine_reset',
@@ -381,7 +381,7 @@ class ArcaneTempest(Sorcery):
     name = 'Arcane Tempest'
     text = "Reduce all opponent's ATK by 40."
     activation_needs = ['back-right']
-    role = "sentinel"
+    role = "white"
     def __init__(self, owner):
         super().__init__('arcane_tempest', owner, image='/static/cards/arcane_tempest.png', mana=2)
 
@@ -398,7 +398,7 @@ class SilentRecruiter(Sorcery):
     name = "Silent Recruiter"
     text = "Choose monster with attack lower or equal to 180 from deck and add to hand."
     activation_needs = ['back']
-    role = "manipulator"
+    role = "white"
     def __init__(self, owner):
         super().__init__(
             card_id="silent_recruiter",
@@ -436,7 +436,7 @@ class OneMoreTrick(Sorcery):
     name = "One More Trick"
     text = "Choose a sorcery from deck and add to hand."
     activation_needs = ['forward']
-    role = "manipulator"
+    role = "blue"
     def __init__(self, owner):
         super().__init__(
             card_id="one_more_trick",
@@ -469,9 +469,9 @@ class OneMoreTrick(Sorcery):
 
 class WanderersCompass(Sorcery):
     name = "Wanderer's Compass"
-    text = "Choose a walker sorcerer from deck and add to hand."
+    text = "Choose a blue sorcerer from deck and add to hand."
     activation_needs = ['left']
-    role = "walker"
+    role = "blue"
     def __init__(self, owner):
         super().__init__(
             card_id="wanderers_compass",
@@ -487,7 +487,7 @@ class WanderersCompass(Sorcery):
         target_deck = game.decks[self.owner]
         valid_targets = []
         for card in target_deck:
-            if card.type == 'sorcery' and card.role == 'walker':
+            if card.type == 'sorcery' and card.role == 'blue':
                 valid_targets.append(card)
         return valid_targets
 
@@ -506,7 +506,7 @@ class TargetedDestruction(Sorcery):
     name = "Targeted Destruction"
     text = "Choose and destroy an enemy monster."
     activation_needs = ['forward-right']
-    role = "breaker"
+    role = "black"
     def __init__(self, owner):
         super().__init__(
             card_id="targeted_destruction",
@@ -540,7 +540,7 @@ class EmpoweringLight(Sorcery):
     name = "Empowering Light"
     text = "Choose a monster to increase its ATK by 50."
     activation_needs = ['back-left']  # Optional highlight rules
-    role = "sentinel"
+    role = "white"
     def __init__(self, owner):
         super().__init__(
             card_id="empowering_light",
@@ -573,7 +573,7 @@ class FrostbiteCurse(Sorcery):
     name = "Frostbite Curse"
     text = "Choose a monster to decrease its DEF by 30."
     activation_needs = ['forward']
-    role = "aggressor"
+    role = "red"
     def __init__(self, owner):
         super().__init__(
             card_id="frostbite_curse",
@@ -606,7 +606,7 @@ class MindSeize(Sorcery):
     name = "Mind Seize"
     text = "Choose an enemy monster to take control of it."
     activation_needs = ['back']
-    role = "manipulator"
+    role = "red"
     def __init__(self, owner):
         super().__init__(
             card_id="mind_seize",
@@ -639,7 +639,7 @@ class PowerSurge(Sorcery):
     name = "Power Surge"
     text = "Choose a monster to double its ATK and DEF."
     activation_needs = ['forward']
-    role = "aggressor"
+    role = "red"
     def __init__(self, owner):
         super().__init__(
             card_id="power_surge",
@@ -672,7 +672,7 @@ class VolcanicRift(Land):
     name = "Volcanic Rift"
     text = "Burns an opponent's monster for 50 DEF when it steps on this tile."
     creation_needs = ["forward"]
-    role = "aggressor"
+    role = "red"
     def __init__(self, owner):
         super().__init__('volcanic_rift', owner, image='/static/cards/volcanic_rift.png', mana=1)
 
@@ -689,7 +689,7 @@ class SacredGrove(Land):
     name = "Sacred Grove"
     text = "Heals your monster for 30 DEF every turn it's on this tile."
     creation_needs = ['left']
-    role = "walker"
+    role = "blue"
     def __init__(self, owner):
         super().__init__('sacred_grove', owner, image='/static/cards/sacred_grove.png', mana=1)
 
@@ -702,7 +702,7 @@ class FrozenBarrier(Land):
     name = "Frozen Barrier"
     text = "Opponent's monsters cannot move across this tile."
     creation_needs = ["right", 'forward']
-    role = "sentinel"
+    role = "white"
     def __init__(self, owner):
         super().__init__('frozen_barrier', owner, image='/static/cards/frozen_barrier.png', mana=1)
 
@@ -717,7 +717,7 @@ class FrozenBarrier(Land):
 #     name = "Weary Travellers Inn"
 #     text = "When your monster lands on this tile, you gain one more move."
 #     creation_needs = ["right", 'forward']
-#     role = "walker"
+#     role = "blue"
 #     def __init__(self, owner):
 #         super().__init__('weary_travellers_inn', owner, image='/static/cards/weary_travellers_inn.png', mana=1)
 #
@@ -741,7 +741,7 @@ class StormNexus(Land):
     name = "Storm Nexus"
     text = "Reduces the ATK of enemy monsters that land on this tile by 40."
     creation_needs = ["back-left"]
-    role = "breaker"
+    role = "black"
     def __init__(self, owner):
         super().__init__('storm_nexus', owner, image='/static/cards/storm_nexus.png', mana=1)
 
@@ -754,7 +754,7 @@ class WastelandMine(Land):
     name = "Wasteland Mine"
     text = "An opponents monster going over or landing on this land loses 30 ATK and DEF"
     creation_needs = ["right"]
-    role = "manipulator"
+    role = "red"
     def __init__(self, owner):
         super().__init__('wasteland_mine', owner, image='/static/cards/wasteland_mine.png', mana=1)
 
@@ -773,7 +773,7 @@ class RuleOfTheMeek(Land):
     name = "Rule of the Meek"
     text = "Opponent's monsters with ATK or DEF over 150 cannot move across this tile."
     creation_needs = ["forward-right"]
-    role = "sentinel"
+    role = "white"
     def __init__(self, owner):
         super().__init__('rule_of_the_meek', owner, image='/static/cards/rule_of_the_meek.png', mana=1)
 

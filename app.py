@@ -215,21 +215,21 @@ def game(ws, game_id):
                         return msg_type, extra
                     _broadcast_per_viewer(game_id, builder)
 
-                elif game.center_tile_control[user_id] >= 7:
-                    # This player wins (same payload fields as before)
-                    def builder(uid, game_):
-                        extra = {
-                            'success': True,
-                            'mana': game_.mana,
-                            'info': f"Player {user_id} has controlled the center for 6 turns!",
-                            'moves_left': game_.max_moves_per_turn - game_.moves_this_turn,
-                            'game_over': {
-                                'result': 'victory' if uid == user_id else 'defeat'
-                            },
-                            'usernames': user_assignments[game_id],
-                        }
-                        return 'game-over', extra
-                    _broadcast_per_viewer(game_id, builder)
+                # elif game.center_tile_control[user_id] >= 7:
+                #     # This player wins (same payload fields as before)
+                #     def builder(uid, game_):
+                #         extra = {
+                #             'success': True,
+                #             'mana': game_.mana,
+                #             'info': f"Player {user_id} has controlled the center for 6 turns!",
+                #             'moves_left': game_.max_moves_per_turn - game_.moves_this_turn,
+                #             'game_over': {
+                #                 'result': 'victory' if uid == user_id else 'defeat'
+                #             },
+                #             'usernames': user_assignments[game_id],
+                #         }
+                #         return 'game-over', extra
+                #     _broadcast_per_viewer(game_id, builder)
 
                 elif user_id == game.current_player:
                     game.toggle_turn()
