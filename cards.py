@@ -469,7 +469,7 @@ class OneMoreTrick(Sorcery):
 
 class WanderersCompass(Sorcery):
     name = "Wanderer's Compass"
-    text = "Choose a blue sorcerer from deck and add to hand."
+    text = "Choose a blue sorcery from deck and add to hand."
     activation_needs = ['left']
     role = "blue"
     def __init__(self, owner):
@@ -781,3 +781,364 @@ class RuleOfTheMeek(Land):
         if monster.owner != self.owner and ((monster.defense > 150) and (monster.attack > 150)):
             return True
         return False
+
+
+
+
+
+
+
+# NEW
+
+
+# =========================
+# MONSTERS
+# =========================
+
+class EmberRavager(Monster):
+    name = "Ember Ravager"
+    movement = {
+        "forward": 2,
+        "left": 1,
+        "right": 1,
+        "back": 1
+    }
+    role = "red"
+    original_attack = 240
+    original_defense = 140
+
+    def __init__(self, owner):
+        super().__init__(
+            card_id='ember_ravager',
+            owner=owner,
+            attack=self.original_attack,
+            defense=self.original_defense,
+            image='/static/cards/ember_ravager.png',
+            mana=4
+        )
+
+
+class RiftStrider(Monster):
+    name = "Rift Strider"
+    movement = {
+        "forward": "any",
+        "back": "any",
+        "left": "any",
+        "right": "any"
+    }
+    role = "blue"
+    original_attack = 160
+    original_defense = 160
+
+    def __init__(self, owner):
+        super().__init__(
+            card_id='rift_strider',
+            owner=owner,
+            attack=self.original_attack,
+            defense=self.original_defense,
+            image='/static/cards/rift_strider.png',
+            mana=4
+        )
+
+
+class PaleSentinel(Monster):
+    name = "Pale Sentinel"
+    movement = {
+        "forward-left": 1,
+        "forward-right": 1,
+        "back-left": 2,
+        "back-right": 2
+    }
+    role = "white"
+    original_attack = 150
+    original_defense = 220
+
+    def __init__(self, owner):
+        super().__init__(
+            card_id='pale_sentinel',
+            owner=owner,
+            attack=self.original_attack,
+            defense=self.original_defense,
+            image='/static/cards/pale_sentinel.png',
+            mana=3
+        )
+
+
+class GloomStalker(Monster):
+    name = "Gloom Stalker"
+    movement = {
+        "forward-left": 2,
+        "forward-right": 2,
+        "left": 1,
+        "right": 1
+    }
+    role = "black"
+    original_attack = 210
+    original_defense = 160
+
+    def __init__(self, owner):
+        super().__init__(
+            card_id='gloom_stalker',
+            owner=owner,
+            attack=self.original_attack,
+            defense=self.original_defense,
+            image='/static/cards/gloom_stalker.png',
+            mana=4
+        )
+
+
+# =========================
+# LANDS (new mechanics)
+# =========================
+
+class SanctumOfDawn(Land):
+    name = "Sanctum of Dawn"
+    text = "At the start of your turn, if your monster is on this tile, gain 1 mana."
+    creation_needs = ["left"]
+    role = "white"
+
+    def __init__(self, owner):
+        super().__init__('sanctum_of_dawn', owner, image='/static/cards/sanctum_of_dawn.png', mana=1)
+
+    def on_turn_start(self, game, pos, monster):
+        if monster and monster.owner == self.owner:
+            game.mana[self.owner] = game.mana.get(self.owner, 0) + 1
+
+
+class ObsidianSpikes(Land):
+    name = "Obsidian Spikes"
+    text = "Enemies lose 40 DEF entering; passing through also shaves 20 ATK."
+    creation_needs = ["forward"]
+    role = "red"
+
+    def __init__(self, owner):
+        super().__init__('obsidian_spikes', owner, image='/static/cards/obsidian_spikes.png', mana=1)
+
+    def on_enter(self, game, pos, monster):
+        if monster.owner != self.owner:
+            monster.defense -= 40
+            if monster.defense <= 0:
+                game.graveyard[monster.owner].append(monster)
+                x, y = pos
+                game.board[x][y] = None
+
+    def affect_monster_passing(self, monster):
+        if monster.owner != self.owner:
+            monster.attack -= 20
+
+
+class AetherSpring(Land):
+    name = "Aether Spring"
+    text = "At the start of your turn, if your monster is here, draw 1."
+    creation_needs = ["forward-right"]
+    role = "blue"
+
+    def __init__(self, owner):
+        super().__init__('aether_spring', owner, image='/static/cards/aether_spring.png', mana=1)
+
+    def on_turn_start(self, game, pos, monster):
+        if monster and monster.owner == self.owner and game.decks[self.owner]:
+            game.hands[self.owner].append(game.decks[self.owner].pop(0))
+
+
+class NightshroudBog(Land):
+    name = "Nightshroud Bog"
+    text = "Enemies entering lose 20 ATK and 20 DEF."
+    creation_needs = ["back"]
+    role = "black"
+
+    def __init__(self, owner):
+        super().__init__('nightshroud_bog', owner, image='/static/cards/nightshroud_bog.png', mana=1)
+
+    def on_enter(self, game, pos, monster):
+        if monster.owner != self.owner:
+            monster.attack -= 20
+            monster.defense -= 20
+            if monster.defense <= 0:
+                game.graveyard[monster.owner].append(monster)
+                x, y = pos
+                game.board[x][y] = None
+
+
+class WardOfCensure(Land):
+    name = "Ward of Censure"
+    text = "Blocks movement of enemy red or white monsters."
+    creation_needs = ["back-left"]
+    role = "black"
+
+    def __init__(self, owner):
+        super().__init__('ward_of_censure', owner, image='/static/cards/ward_of_censure.png', mana=1)
+
+    def blocks_movement(self, monster):
+        return monster.owner != self.owner and (getattr(monster, "role", None) in ("red", "white"))
+
+
+# =========================
+# SORCERIES (tutoring, land control, role synergies)
+# =========================
+
+class MonarchsSummons(Sorcery):
+    name = "Monarch's Summons"
+    text = "Tutor a red monster with ATK ≥ 200 from your deck to your hand."
+    activation_needs = ["right"]  # position-gated like your other sorceries
+    role = "red"
+
+    def __init__(self, owner):
+        super().__init__('monarchs_summons', owner, image='/static/cards/monarchs_summons.png', mana=2)
+
+    def requires_deck_tutoring(self):
+        return True
+
+    def get_valid_tutoring_targets(self, game, user_id):
+        out = []
+        for card in game.decks[self.owner]:
+            if card.type == 'monster' and getattr(card, "role", None) == "red" and getattr(card, "attack", 0) >= 200:
+                out.append(card)
+        return out
+
+    def resolve_with_tutoring_input(self, card_id, game, user_id):
+        for c in list(game.decks[self.owner]):
+            if c.id == card_id:
+                game.decks[self.owner].remove(c)
+                game.hands[self.owner].append(c)
+                return True, f"{c.name} added to your hand."
+        return False, "Invalid target."
+
+
+class HexOfInversion(Sorcery):
+    name = "Hex of Inversion"
+    text = "Choose a monster; swap its ATK and DEF."
+    activation_needs = ["back-right"]
+    role = "black"
+
+    def __init__(self, owner):
+        super().__init__('hex_of_inversion', owner, image='/static/cards/hex_of_inversion.png', mana=2)
+
+    def requires_additional_input(self):
+        return True
+
+    def get_valid_targets(self, game, user_id):
+        return [
+            [x, y] for x, row in enumerate(game.board)
+            for y, card in enumerate(row)
+            if card and isinstance(card, Monster)
+        ]
+
+    def resolve_with_input(self, game, user_id, pos):
+        x, y = pos
+        card = game.board[x][y]
+        if card and isinstance(card, Monster):
+            card.attack, card.defense = card.defense, card.attack
+            return True, f"{card.name}'s ATK and DEF were inverted!"
+        return False, "Invalid target"
+
+
+class Overcharge(Sorcery):
+    name = "Overcharge"
+    text = "Choose your monster; it gains +100 ATK and loses 50 DEF."
+    activation_needs = ["forward-left"]
+    role = "red"
+
+    def __init__(self, owner):
+        super().__init__('overcharge', owner, image='/static/cards/overcharge.png', mana=1)
+
+    def requires_additional_input(self):
+        return True
+
+    def get_valid_targets(self, game, user_id):
+        return [
+            [x, y] for x, row in enumerate(game.board)
+            for y, card in enumerate(row)
+            if card and card.owner == user_id and isinstance(card, Monster)
+        ]
+
+    def resolve_with_input(self, game, user_id, pos):
+        x, y = pos
+        card = game.board[x][y]
+        if card and card.owner == user_id:
+            card.attack += 100
+            card.defense -= 50
+            if card.defense <= 0:
+                game.graveyard[card.owner].append(card)
+                game.board[x][y] = None
+            return True, f"{card.name} surges with power!"
+        return False, "Invalid target"
+
+
+class TideOfKnowledge(Sorcery):
+    name = "Tide of Knowledge"
+    text = "Draw up to 2 cards. +1 extra if you control at least 2 blue lands."
+    activation_needs = ["forward"]
+    role = "blue"
+
+    def __init__(self, owner):
+        super().__init__('tide_of_knowledge', owner, image='/static/cards/tide_of_knowledge.png', mana=2)
+
+    def affect_board(self, game, target_pos, user_id):
+        # count blue lands you control
+        blue_lands = sum(
+            1 for row in game.land_board for land in row
+            if land and land.owner == user_id and getattr(land, "role", None) == "blue"
+        )
+        draws = 2 + (1 if blue_lands >= 2 else 0)
+        for _ in range(draws):
+            if game.decks[user_id]:
+                game.hands[user_id].append(game.decks[user_id].pop(0))
+
+
+class ConsecrateGround(Sorcery):
+    name = "Consecrate Ground"
+    text = "Destroy an enemy land."
+    activation_needs = ["left"]
+    role = "white"
+
+    def __init__(self, owner):
+        super().__init__('consecrate_ground', owner, image='/static/cards/consecrate_ground.png', mana=2)
+
+    def requires_additional_input(self):
+        return True
+
+    def get_valid_targets(self, game, user_id):
+        return [
+            [x, y] for x, row in enumerate(game.land_board)
+            for y, land in enumerate(row)
+            if land and land.owner != user_id
+        ]
+
+    def resolve_with_input(self, game, user_id, pos):
+        x, y = pos
+        land = game.land_board[x][y]
+        if land and land.owner != user_id:
+            game.land_board[x][y] = None
+            return True, "The enemy land crumbles to dust."
+        return False, "Invalid target"
+
+
+class BloodTithe(Sorcery):
+    name = "Blood Tithe"
+    text = "Sacrifice one of your monsters; gain 2 mana."
+    activation_needs = ["back"]
+    role = "black"
+
+    def __init__(self, owner):
+        super().__init__('blood_tithe', owner, image='/static/cards/blood_tithe.png', mana=1)
+
+    def requires_additional_input(self):
+        return True
+
+    def get_valid_targets(self, game, user_id):
+        return [
+            [x, y] for x, row in enumerate(game.board)
+            for y, card in enumerate(row)
+            if card and card.owner == user_id and isinstance(card, Monster)
+        ]
+
+    def resolve_with_input(self, game, user_id, pos):
+        x, y = pos
+        card = game.board[x][y]
+        if card and card.owner == user_id:
+            game.graveyard[user_id].append(card)
+            game.board[x][y] = None
+            game.mana[user_id] = game.mana.get(user_id, 0) + 2
+            return True, "The ritual grants you power."
+        return False, "Invalid target"

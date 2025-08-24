@@ -114,8 +114,8 @@ class ChessGame:
         self.land_placed_this_turn.clear()
         self.draw_card(self.current_player)
 
-        for x in range(7):
-            for y in range(7):
+        for x in range(6):
+            for y in range(6):
                 card = self.board[x][y]
                 land = self.land_board[x][y]
                 if card and land and hasattr(land, 'on_turn_start'):
@@ -134,7 +134,7 @@ class ChessGame:
             return False, "Invalid card selected", False
 
         opponent = '2' if user_id == '1' else '1'
-        back_row = 0 if user_id == '1' else 6
+        back_row = 0 if user_id == '1' else 5
         if x != back_row:
             return False, "Not in position for direct attack", False
 

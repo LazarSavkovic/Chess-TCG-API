@@ -4,10 +4,252 @@ import json
 import uuid
 from game import ChessGame
 from flask_cors import CORS
+import traceback, faulthandler
+from flask import Flask, request, jsonify, abort
+from models import db, User, Deck, DeckPile, DeckCard, PileType
+from functools import wraps
+import inspect
+from cards import Monster, Land, Sorcery  # import your base classes
+
+
+faulthandler.enable()
 
 app = Flask(__name__)
 CORS(app)
 sock = Sock(app)
+
+# dev: SQLite; prod: set to your Postgres URL
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///dev.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db.init_app(app)
+
+
+
+# --- helpers ---------------------------------------------------------------
+
+def _all_subclasses(cls):
+    out = set()
+    for sub in cls.__subclasses__():
+        out.add(sub)
+        out |= _all_subclasses(sub)
+    return out
+
+# keep only stable, catalog-y fields; strip instance id/owner
+WANTED_FIELDS = {
+    "card_id","type","name","role","mana","image","text","attack","defense",
+    "activation_needs","creation_needs","movement"
+}
+
+def _slim(d: dict) -> dict:
+    return {k: v for k, v in d.items() if k in WANTED_FIELDS}
+
+# cache so we don’t rebuild every request (hot-reload clears this)
+_CARD_CATALOG = None
+
+def build_card_catalog():
+    global _CARD_CATALOG
+    if _CARD_CATALOG is not None:
+        return _CARD_CATALOG
+
+    catalog = []
+    for base in (Monster, Land, Sorcery):
+        for cls in sorted(_all_subclasses(base), key=lambda c: c.__name__):
+            # Most of your cards only need owner
+            try:
+                inst = cls(owner="1")
+            except TypeError:
+                # If a special constructor appears, skip it (or handle here)
+                continue
+            d = inst.to_dict()
+            d.pop("id", None)     # per-instance uuid
+            d.pop("owner", None)  # not needed for catalog
+            # prefer class attr name if to_dict omitted it
+            if "name" not in d and getattr(cls, "name", None):
+                d["name"] = cls.name
+            catalog.append(_slim(d))
+
+    _CARD_CATALOG = catalog
+    return _CARD_CATALOG
+
+# --- routes ----------------------------------------------------------------
+
+@app.get("/api/cards")
+def api_cards():
+    """
+    Optional filters:
+      /api/cards?type=monster|sorcery|land&role=blue&q=search
+    """
+    print('heeeere')
+    data = build_card_catalog()
+    q_type = (request.args.get("type") or "").lower()
+    q_role = (request.args.get("role") or "").lower()
+    q      = (request.args.get("q") or "").lower()
+
+    def ok(c):
+        if q_type and (c.get("type","").lower() != q_type): return False
+        if q_role and (c.get("role","").lower() != q_role): return False
+        if q:
+            hay = f"{c.get('name','')} {c.get('card_id','')} {c.get('text','')}".lower()
+            if q not in hay: return False
+        return True
+
+    return jsonify([c for c in data if ok(c)])
+
+@app.post("/api/cards/reload")
+def api_cards_reload():
+    """If you edit cards.py at runtime, call this to rebuild the cache."""
+    global _CARD_CATALOG
+    _CARD_CATALOG = None
+    return jsonify({"ok": True, "reloaded": True})
+
+
+# --- Auth: trust Clerk user id from a verified header or JWT middleware upstream ---
+# For now, keep it simple: FE sends Clerk user id in a header after verifying with Clerk.
+CLERK_HEADER = "X-Clerk-User-Id"
+
+def require_user(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        clerk_user_id = request.headers.get(CLERK_HEADER)
+        if not clerk_user_id:
+            abort(401)
+        user = User.query.filter_by(clerk_user_id=clerk_user_id).first()
+        if not user:
+            user = User(clerk_user_id=clerk_user_id)
+            db.session.add(user)
+            db.session.commit()
+        request.user = user
+        return f(*args, **kwargs)
+    return wrapper
+
+@app.route("/api/decks", methods=["GET"])
+@require_user
+def list_decks():
+    decks = (Deck.query
+             .filter_by(user_id=request.user.id)
+             .order_by(Deck.created_at.desc())
+             .all())
+    return jsonify([{
+        "id": str(d.id), "name": d.name, "description": d.description,
+        "is_active": d.is_active, "created_at": d.created_at.isoformat()
+    } for d in decks])
+
+@app.route("/api/decks", methods=["POST"])
+@require_user
+def create_deck():
+    data = request.get_json(force=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    desc = data.get("description")
+
+    deck = Deck(user_id=request.user.id, name=name, description=desc)
+    db.session.add(deck)
+    db.session.flush()  # get deck.id
+
+    # Create default piles
+    for p in (PileType.MAIN, PileType.LAND):
+        db.session.add(DeckPile(deck_id=deck.id, pile_type=p))
+    db.session.commit()
+
+    return jsonify({"id": str(deck.id), "name": deck.name}), 201
+
+@app.route("/api/decks/<deck_id>", methods=["GET"])
+@require_user
+def get_deck(deck_id):
+    deck = Deck.query.filter_by(id=deck_id, user_id=request.user.id).first_or_404()
+    piles = DeckPile.query.filter_by(deck_id=deck.id).all()
+    result = {
+        "id": str(deck.id),
+        "name": deck.name,
+        "description": deck.description,
+        "is_active": deck.is_active,
+        "piles": {}
+    }
+    for p in piles:
+        cards = (DeckCard.query
+                 .filter_by(pile_id=p.id)
+                 .order_by(DeckCard.position.asc().nulls_last(), DeckCard.card_id.asc())
+                 .all())
+        result["piles"][p.pile_type.value] = [{"card_id": c.card_id, "qty": c.qty, "position": c.position} for c in cards]
+    return jsonify(result)
+
+@app.route("/api/decks/<deck_id>", methods=["PUT"])
+@require_user
+def update_deck(deck_id):
+    deck = Deck.query.filter_by(id=deck_id, user_id=request.user.id).first_or_404()
+    data = request.get_json(force=True) or {}
+    if "name" in data: deck.name = data["name"].strip() or deck.name
+    if "description" in data: deck.description = data["description"]
+    if "is_active" in data:
+        # make this the only active deck for the user if set true
+        if data["is_active"]:
+            Deck.query.filter(Deck.user_id==request.user.id, Deck.id!=deck.id).update({"is_active": False})
+        deck.is_active = bool(data["is_active"])
+    db.session.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/decks/<deck_id>/cards", methods=["POST"])
+@require_user
+def replace_pile_cards(deck_id):
+    """
+    Body:
+    {
+      "pile": "MAIN" | "LAND" | "SIDE",
+      "cards": [{"card_id":"bonecrawler","qty":3,"position":null}, ...]
+    }
+    This REPLACES the pile contents (idempotent).
+    """
+    data = request.get_json(force=True) or {}
+    pile_name = (data.get("pile") or "").upper()
+    try:
+        pile_type = PileType[pile_name]
+    except Exception:
+        return jsonify({"error":"invalid pile"}), 400
+
+    deck = Deck.query.filter_by(id=deck_id, user_id=request.user.id).first_or_404()
+    pile = DeckPile.query.filter_by(deck_id=deck.id, pile_type=pile_type).first()
+    if not pile:
+        pile = DeckPile(deck_id=deck.id, pile_type=pile_type)
+        db.session.add(pile)
+        db.session.flush()
+
+    # wipe and replace
+    DeckCard.query.filter_by(pile_id=pile.id).delete()
+    cards = data.get("cards") or []
+    for i, entry in enumerate(cards):
+        cid = entry.get("card_id")
+        qty = int(entry.get("qty", 1))
+        pos = entry.get("position", i)
+        if not cid or qty <= 0:
+            continue
+        db.session.add(DeckCard(pile_id=pile.id, card_id=cid, qty=qty, position=pos))
+
+    db.session.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/decks/<deck_id>", methods=["DELETE"])
+@require_user
+def delete_deck(deck_id):
+    deck = Deck.query.filter_by(id=deck_id, user_id=request.user.id).first_or_404()
+    db.session.delete(deck)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 user_assignments = {}
 connected_users = {}
@@ -327,6 +569,7 @@ def game(ws, game_id):
                             'valid_targets': valid_targets,
                             'card_id': card.card_id,
                             'pos': pos,
+                            'card': card.to_dict(),
                             'mana': game.mana,
                             'info': f'{card.name} activated',
                             'moves_left': game.moves_this_turn and (game.max_moves_per_turn - game.moves_this_turn) or game.max_moves_per_turn,
@@ -340,6 +583,7 @@ def game(ws, game_id):
                             'valid_tutoring_targets': [c.to_dict() for c in valid_tutoring_targets],
                             'card_id': card.card_id,
                             'mana': game.mana,
+                            'pos': pos,
                             'info': f'{card.name} activated',
                             'moves_left': game.max_moves_per_turn - game.moves_this_turn,
                             'usernames': user_assignments[game_id],
@@ -455,11 +699,25 @@ def game(ws, game_id):
                     })
 
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        # Full Python traceback (with line numbers)
+        print("\n=== WebSocket exception ===")
+        print("game_id:", game_id, "user_id:", user_id)
+        print("Last received message:", locals().get("data", None))
+        traceback.print_exc()
+        # Optionally send to the client, so you see it in the browser console
+        try:
+            ws.send(json.dumps({
+                "type": "server-error",
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }))
+        except Exception:
+            pass
+
     finally:
         if user_id and user_id in connected_users[game_id]:
             del connected_users[game_id][user_id]
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, use_reloader=False)
