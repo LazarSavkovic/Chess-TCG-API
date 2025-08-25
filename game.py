@@ -3,6 +3,75 @@ from card_types import Monster, Sorcery, Land
 from random import shuffle, choice
 from util import get_playable_card_classes, build_capped_deck
 from card_types import evaluate_creation_or_activation_needs
+from random import shuffle
+
+from random import shuffle
+from util import get_playable_card_classes
+
+# Build registry card_id -> class
+_CARD_CLASS_BY_ID = None
+def _class_by_id():
+    global _CARD_CLASS_BY_ID
+    if _CARD_CLASS_BY_ID is None:
+        _CARD_CLASS_BY_ID = {}
+        for cls in get_playable_card_classes():
+            # assumes each class exposes a unique .card_id (string)
+            _CARD_CLASS_BY_ID[getattr(cls, "card_id", cls.__name__)] = cls
+    return _CARD_CLASS_BY_ID
+
+def build_instances_from_rows(rows, owner):
+    out = []
+    reg = _class_by_id()
+    for r in (rows or []):
+        cid = r.get("card_id")
+        qty = int(r.get("qty", 1))
+        cls = reg.get(cid)
+        if not cls:
+            # Unknown card id -> skip (or raise)
+            continue
+        for _ in range(max(1, qty)):
+            out.append(cls(owner))
+    shuffle(out)
+    return out
+
+def validate_deck_payload(payload, *, max_main=40, max_land=15, max_copies=3):
+    """Return (ok, msg)"""
+    if not isinstance(payload, dict) or "piles" not in payload:
+        return False, "Invalid deck file"
+
+    piles = payload["piles"]
+    main = piles.get("MAIN", [])
+    land = piles.get("LAND", [])
+    # (SIDE is allowed but unused during start; you can add it later)
+
+    # size checks (tune as you wish, or just warn)
+    if len(main) == 0:
+        return False, "MAIN pile is empty"
+    # Optional: enforce exact sizes if your rules want it
+    # total_main = sum(row.get("qty", 1) for row in main)
+    # total_land = sum(row.get("qty", 1) for row in land)
+    # if total_main != max_main: return False, f"MAIN must be {max_main} cards"
+    # if total_land != max_land: return False, f"LAND must be {max_land} cards"
+
+    # copy cap
+    from collections import Counter
+    c = Counter()
+    for row in main + land:
+        c[row.get("card_id")] += int(row.get("qty", 1))
+    over = [cid for cid, n in c.items() if n > max_copies]
+    if over:
+        return False, f"Too many copies of: {', '.join(over)} (>{max_copies})"
+
+    # card id existence check (optional)
+    reg = _class_by_id()
+    missing = [r.get("card_id") for r in (main + land) if r.get("card_id") not in reg]
+    if missing:
+        return False, f"Unknown card ids: {', '.join(sorted(set(missing)))}"
+
+    return True, "ok"
+
+
+
 
 class ChessGame:
     def __init__(self):
@@ -10,51 +79,53 @@ class ChessGame:
         self.land_board = self.init_land_board()
 
         self.players = ['1', '2']
-        self.mana = {'1': 50, '2': 50}
-        self.graveyard = {'1': [], '2': []}
-
-
         self.turn_index = 0
         self.moves_this_turn = 0
         self.max_moves_per_turn = 3
-        self.center_tile_control = {
-            '1': 0,
-            '2': 0
-        }
+        self.center_tile_control = {'1': 0, '2': 0}
 
-        # Separate card classes
-        all_card_classes = get_playable_card_classes()
-        monster_sorcery_classes = [cls for cls in all_card_classes if not issubclass(cls, Land)]
-        land_classes = [cls for cls in all_card_classes if issubclass(cls, Land)]
+        self.mana = {'1': 50, '2': 50}
+        self.graveyard = {'1': [], '2': []}
 
-        # Build decks (40 cards, max 3 of each)
-        self.decks = {
-            '1': build_capped_deck(monster_sorcery_classes, '1', 40, max_copies=3),
-            '2': build_capped_deck(monster_sorcery_classes, '2', 40, max_copies=3),
-        }
-
-        # Build land decks (15 cards, max 3 of each)
-        self.land_decks = {
-            '1': build_capped_deck(land_classes, '1', 15, max_copies=3),
-            '2': build_capped_deck(land_classes, '2', 15, max_copies=3),
-        }
-
-        # self.decks = {
-        #     '1': [choice(all_card_classes)('1') for _ in range(24)] + [SilentRecruiter('1') for _ in range(10)] + [OneMoreTrick('1') for _ in range(10)] + [WanderersCompass('1') for _ in range(10)],
-        #     '2': [choice(all_card_classes)('2') for _ in range(24)] + [SilentRecruiter('2') for _ in range(10)] + [OneMoreTrick('2') for _ in range(10)] + [WanderersCompass('2') for _ in range(10)],
-        # }
-
-        shuffle(self.decks['1'])
-        shuffle(self.decks['2'])
-
-        # Initial hands = draw 3 cards from the deck
-        self.hands = {
-            '1': [self.decks['1'].pop() for _ in range(5)],
-            '2': [self.decks['2'].pop() for _ in range(5)]
-        }
+        # runtime state
+        self.decks = {'1': [], '2': []}
+        self.land_decks = {'1': [], '2': []}
+        self.hands = {'1': [], '2': []}
         self.summoned_this_turn = set()
         self.sorcery_used_this_turn = set()
         self.land_placed_this_turn = set()
+
+    def reset_runtime_state(self):
+        self.board = self.init_board()
+        self.land_board = self.init_land_board()
+        self.turn_index = 0
+        self.moves_this_turn = 0
+        self.center_tile_control = {'1': 0, '2': 0}
+        self.mana = {'1': 50, '2': 50}
+        self.graveyard = {'1': [], '2': []}
+        self.hands = {'1': [], '2': []}
+        self.summoned_this_turn = set()
+        self.sorcery_used_this_turn = set()
+        self.land_placed_this_turn = set()
+
+    def apply_decks_and_start(self, deck_rows_p1, land_rows_p1, deck_rows_p2, land_rows_p2):
+        """
+        deck_rows_* and land_rows_* are compressed rows from your export:
+        [{card_id, qty, position}]
+        """
+        self.reset_runtime_state()
+
+        self.decks['1'] = build_instances_from_rows(deck_rows_p1, '1')
+        self.decks['2'] = build_instances_from_rows(deck_rows_p2, '2')
+        self.land_decks['1'] = build_instances_from_rows(land_rows_p1, '1')
+        self.land_decks['2'] = build_instances_from_rows(land_rows_p2, '2')
+
+        # initial draw (5)
+        for pid in ['1', '2']:
+            # guard if short decks
+            draw_n = min(5, len(self.decks[pid]))
+            self.hands[pid] = [self.decks[pid].pop() for _ in range(draw_n)]
+
 
     @staticmethod
     def get_valid_summon_positions(user_id):

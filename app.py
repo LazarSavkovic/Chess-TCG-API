@@ -10,6 +10,10 @@ from models import db, User, Deck, DeckPile, DeckCard, PileType
 from functools import wraps
 import inspect
 from cards import Monster, Land, Sorcery  # import your base classes
+# Both gave choices & readied -> validate & start
+from game import validate_deck_payload
+from simple_websocket.errors import ConnectionClosed
+
 
 
 faulthandler.enable()
@@ -238,22 +242,68 @@ def delete_deck(deck_id):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 user_assignments = {}
 connected_users = {}
 games = {}
+# app.py (game socket handler additions)
+
+rooms = {}  # game_id -> {"phase": "lobby"|"playing", "choices": {"1": None, "2": None}, "ready": {"1": False, "2": False}}
+
+def _room(game_id):
+    if game_id not in rooms:
+        rooms[game_id] = {
+            "phase": "lobby",
+            "choices": {'1': None, '2': None},   # stores uploaded payloads (or deck_ids)
+            "ready": {'1': False, '2': False},
+        }
+    return rooms[game_id]
+
+def _broadcast_lobby(game_id):
+    r = _room(game_id)
+    game = games.get(game_id)  # always send with a real game for _base_state
+    extra = {
+        # do NOT put "type" here; _send will set it
+        "phase": r["phase"],
+        "choices": {k: bool(v) for k, v in r["choices"].items()},
+        "ready": r["ready"],
+        "usernames": user_assignments.get(game_id, {}),
+    }
+    _broadcast(game_id, "lobby", game, extra)  # <-- extra, not payload_extra
+
+def _maybe_start_match(game_id, game):
+    r = _room(game_id)
+    if r["phase"] != "lobby":
+        return
+    if not (r["choices"]['1'] and r["choices"]['2']):
+        return
+    if not (r["ready"]['1'] and r["ready"]['2']):
+        return
+
+
+
+    ok1, msg1 = validate_deck_payload(r["choices"]['1'])
+    ok2, msg2 = validate_deck_payload(r["choices"]['2'])
+    if not ok1 or not ok2:
+        # notify failures to specific users if you want; for now, broadcast
+        _broadcast(game_id, "lobby_error", game, {
+                      "message": f"Deck invalid: P1={msg1}, P2={msg2}"
+                                   })
+        return
+
+    p1 = r["choices"]['1']["piles"]
+    p2 = r["choices"]['2']["piles"]
+    game.apply_decks_and_start(
+        p1.get("MAIN", []), p1.get("LAND", []),
+        p2.get("MAIN", []), p2.get("LAND", []),
+    )
+
+    r["phase"] = "playing"
+    # Send initial full state with type 'init' like you already do
+    _broadcast(game_id, 'init', game, {
+        'usernames': user_assignments.get(game_id, {}),
+        'message': 'Match started',
+    })
+
 
 # ---------- Helpers (no behavior change) ----------
 
@@ -326,8 +376,16 @@ def _send(ws, msg_type, game, extra=None):
     ws.send(json.dumps(payload))
 
 def _broadcast(game_id, msg_type, game, extra=None):
-    for ws_conn in connected_users.get(game_id, {}).values():
-        _send(ws_conn, msg_type, game, extra)
+    conns = connected_users.get(game_id, {})
+    dead = []
+    for uid, ws_conn in list(conns.items()):
+        try:
+            _send(ws_conn, msg_type, game, extra)
+        except Exception:
+            dead.append(uid)
+    for uid in dead:
+        conns.pop(uid, None)
+
 
 def _broadcast_per_viewer(game_id, builder):
     """builder(uid, game)->(msg_type, extra_dict) so you can vary 'type' per-recipient."""
@@ -367,7 +425,13 @@ def game(ws, game_id):
 
     try:
         while True:
-            message = ws.receive()
+            try:
+                message = ws.receive()
+            except ConnectionClosed as cc:
+                # Normal client disconnect (page change, StrictMode unmount, tab close, etc.)
+                break
+
+
             if not message:
                 break
 
@@ -410,6 +474,26 @@ def game(ws, game_id):
                     'user_id': user_id,
                     'user_assignments': user_assignments[game_id],
                 })
+                _broadcast_lobby(game_id)
+
+            elif data['type'] == 'choose_deck':
+                # Client sends an exported deck JSON payload directly:
+                # { type:'choose_deck', deck: {version, name, piles:{MAIN, SIDE, LAND}} }
+                r = _room(game_id)
+                deck_payload = data.get('deck')
+                if not deck_payload:
+                    _send(ws, 'lobby_error', games[game_id], {"message": "Missing deck payload"})
+                    continue
+                r["choices"][user_id] = deck_payload
+                r["ready"][user_id] = False  # reset ready on new choice
+                _broadcast_lobby(game_id)
+
+            elif data['type'] == 'ready':
+                r = _room(game_id)
+                r["ready"][user_id] = True
+                _broadcast_lobby(game_id)
+                _maybe_start_match(game_id, game)
+
 
             elif data['type'] == 'move':
                 from_pos = data['from']
