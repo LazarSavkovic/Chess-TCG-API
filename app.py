@@ -260,15 +260,16 @@ def _room(game_id):
 
 def _broadcast_lobby(game_id):
     r = _room(game_id)
-    game = games.get(game_id)  # always send with a real game for _base_state
+    if r['phase'] != 'lobby':
+        return
+    game = games.get(game_id)
     extra = {
-        # do NOT put "type" here; _send will set it
-        "phase": r["phase"],
-        "choices": {k: bool(v) for k, v in r["choices"].items()},
-        "ready": r["ready"],
-        "usernames": user_assignments.get(game_id, {}),
+        'phase': r['phase'],
+        'choices': {k: bool(v) for k, v in r['choices'].items()},
+        'ready': r['ready'],
+        'usernames': user_assignments.get(game_id, {}),
     }
-    _broadcast(game_id, "lobby", game, extra)  # <-- extra, not payload_extra
+    _broadcast(game_id, 'lobby', game, extra)
 
 def _maybe_start_match(game_id, game):
     r = _room(game_id)
@@ -302,6 +303,7 @@ def _maybe_start_match(game_id, game):
     _broadcast(game_id, 'init', game, {
         'usernames': user_assignments.get(game_id, {}),
         'message': 'Match started',
+        'phase': 'playing',   # <-- add
     })
 
 
@@ -435,7 +437,15 @@ def game(ws, game_id):
             if not message:
                 break
 
-            data = json.loads(message)
+            try:
+                data = json.loads(message)
+            except Exception:
+                # Not JSON? Ignore this frame and keep waiting.
+                try:
+                    ws.send(json.dumps({'type': 'error', 'message': 'Expected JSON'}))
+                except Exception:
+                    pass
+                continue
 
             if not user_id:
                 # Ensure the connected_users map exists for this game.
@@ -445,9 +455,14 @@ def game(ws, game_id):
 
                 # Get the username from the client (the client generated it if none existed)
                 incoming_username = data.get('username')
+
                 if not incoming_username:
-                    ws.send(json.dumps({'type': 'error', 'message': 'Username is required'}))
-                    return
+                    # Ignore and wait for a proper identify packet; do NOT close the socket.
+                    try:
+                        ws.send(json.dumps({'type': 'error', 'message': 'Username is required'}))
+                    except Exception:
+                        pass
+                    continue
                 print('incoming_username', incoming_username)
 
                 # Check if this username was already assigned a slot
@@ -473,6 +488,7 @@ def game(ws, game_id):
                     'username': incoming_username,
                     'user_id': user_id,
                     'user_assignments': user_assignments[game_id],
+                    'phase': _room(game_id)['phase'],  # 'lobby' on handshake
                 })
                 _broadcast_lobby(game_id)
 
@@ -486,6 +502,7 @@ def game(ws, game_id):
                     continue
                 r["choices"][user_id] = deck_payload
                 r["ready"][user_id] = False  # reset ready on new choice
+                print('')
                 _broadcast_lobby(game_id)
 
             elif data['type'] == 'ready':
@@ -678,6 +695,8 @@ def game(ws, game_id):
                         _broadcast(game_id, 'update', game, {
                             'success': success,
                             'mana': game.mana,
+                            'card_id': card.card_id,
+                            'pos': pos,
                             'info': info,
                             'moves_left': game.max_moves_per_turn - game.moves_this_turn,
                             'usernames': user_assignments[game_id],
@@ -705,6 +724,8 @@ def game(ws, game_id):
                         'success': success,
                         'mana': game.mana,
                         'info': info,
+                        'card_id': card.card_id,
+                        'pos': pos,
                         'moves_left': game.max_moves_per_turn - game.moves_this_turn,
                         'usernames': user_assignments[game_id],
                     })
@@ -799,7 +820,7 @@ def game(ws, game_id):
             pass
 
     finally:
-        if user_id and user_id in connected_users[game_id]:
+        if user_id and user_id in connected_users.get(game_id, {}):
             del connected_users[game_id][user_id]
 
 

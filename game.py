@@ -1,74 +1,98 @@
 
-from card_types import Monster, Sorcery, Land
-from random import shuffle, choice
-from util import get_playable_card_classes, build_capped_deck
 from card_types import evaluate_creation_or_activation_needs
 from random import shuffle
-
-from random import shuffle
 from util import get_playable_card_classes
+from card_types import Monster, Sorcery, Land
+# game.py
+import re
 
-# Build registry card_id -> class
-_CARD_CLASS_BY_ID = None
-def _class_by_id():
-    global _CARD_CLASS_BY_ID
-    if _CARD_CLASS_BY_ID is None:
-        _CARD_CLASS_BY_ID = {}
-        for cls in get_playable_card_classes():
-            # assumes each class exposes a unique .card_id (string)
-            _CARD_CLASS_BY_ID[getattr(cls, "card_id", cls.__name__)] = cls
-    return _CARD_CLASS_BY_ID
+def _all_subclasses(cls):
+    out = set()
+    for sub in cls.__subclasses__():
+        out.add(sub)
+        out |= _all_subclasses(sub)
+    return out
+
+def _canon_id(s: str) -> str:
+    # accept "Abyssal Leviathan", "abyssal-leviathan", "abyssal_leviathan" as the same
+    return re.sub(r'[^a-z0-9]+', '_', (s or '').lower()).strip('_')
+
+def _legal_id_map():
+    """normalized_id -> canonical_id (from card instances)"""
+    legal = {}
+    for base in (Monster, Sorcery, Land):
+        for cls in _all_subclasses(base):
+            try:
+                inst = cls(owner='1')
+            except TypeError:
+                # if some exotic ctors exist, skip or handle specially
+                continue
+            cid = getattr(inst, 'card_id', None) or getattr(cls, 'card_id', None)
+            if not cid:
+                # fallback to class name
+                cid = cls.__name__
+            legal[_canon_id(cid)] = cid
+    return legal
+
+
+def validate_deck_payload(payload):
+    if not isinstance(payload, dict):
+        return False, "Bad payload"
+
+    piles = payload.get('piles') or {}
+    legal = _legal_id_map()   # normalized_id -> canonical_id
+
+    unknown = []
+    for pile in ('MAIN', 'LAND', 'SIDE'):
+        for row in (piles.get(pile) or []):
+            raw = (row or {}).get('card_id')
+            if _canon_id(raw) not in legal:
+                unknown.append(raw)
+
+    if unknown:
+        # stable, de-duped list for clearer errors
+        bad = ", ".join(sorted({(x or "") for x in unknown}, key=lambda s: s.lower()))
+        return False, f"Unknown card ids: {bad}"
+
+    # (Optional) add size / max-copy checks here
+    return True, "ok"
+
+
+# Canonical id -> class map (same canon rules as validate_deck_payload)
+_CLASS_MAP_CANON = None
+def _class_map_by_canon():
+    m = {}
+    for base in (Monster, Sorcery, Land):
+        for cls in _all_subclasses(base):
+            try:
+                inst = cls(owner='1')
+            except TypeError:
+                continue
+            cid = getattr(inst, 'card_id', None) or getattr(cls, 'card_id', None) or cls.__name__
+            m[_canon_id(cid)] = cls
+    return m
+def _get_class_map():
+    global _CLASS_MAP_CANON
+    if _CLASS_MAP_CANON is None:
+        _CLASS_MAP_CANON = _class_map_by_canon()
+    return _CLASS_MAP_CANON
 
 def build_instances_from_rows(rows, owner):
     out = []
-    reg = _class_by_id()
+    cmap = _get_class_map()
     for r in (rows or []):
-        cid = r.get("card_id")
-        qty = int(r.get("qty", 1))
-        cls = reg.get(cid)
+        key = _canon_id((r or {}).get("card_id"))
+        qty = int((r or {}).get("qty", 1) or 1)
+        cls = cmap.get(key)
         if not cls:
-            # Unknown card id -> skip (or raise)
+            # Helpful log if something still mismatches
+            print(f"[deck] unknown id after canonization: {r}")
             continue
-        for _ in range(max(1, qty)):
+        for _ in range(qty):
             out.append(cls(owner))
     shuffle(out)
     return out
 
-def validate_deck_payload(payload, *, max_main=40, max_land=15, max_copies=3):
-    """Return (ok, msg)"""
-    if not isinstance(payload, dict) or "piles" not in payload:
-        return False, "Invalid deck file"
-
-    piles = payload["piles"]
-    main = piles.get("MAIN", [])
-    land = piles.get("LAND", [])
-    # (SIDE is allowed but unused during start; you can add it later)
-
-    # size checks (tune as you wish, or just warn)
-    if len(main) == 0:
-        return False, "MAIN pile is empty"
-    # Optional: enforce exact sizes if your rules want it
-    # total_main = sum(row.get("qty", 1) for row in main)
-    # total_land = sum(row.get("qty", 1) for row in land)
-    # if total_main != max_main: return False, f"MAIN must be {max_main} cards"
-    # if total_land != max_land: return False, f"LAND must be {max_land} cards"
-
-    # copy cap
-    from collections import Counter
-    c = Counter()
-    for row in main + land:
-        c[row.get("card_id")] += int(row.get("qty", 1))
-    over = [cid for cid, n in c.items() if n > max_copies]
-    if over:
-        return False, f"Too many copies of: {', '.join(over)} (>{max_copies})"
-
-    # card id existence check (optional)
-    reg = _class_by_id()
-    missing = [r.get("card_id") for r in (main + land) if r.get("card_id") not in reg]
-    if missing:
-        return False, f"Unknown card ids: {', '.join(sorted(set(missing)))}"
-
-    return True, "ok"
 
 
 
