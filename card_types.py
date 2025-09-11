@@ -1,5 +1,7 @@
 import uuid
 
+from interactions import StepSpec
+
 
 class Card:
     name = "Default Card"
@@ -105,11 +107,16 @@ class Sorcery(Card):
 
 
 
-    def affect_board(self, game, user_id):
+    def affect_board(self, game, pos, user_id):
+        """Legacy simple effect. Subclasses may override."""
+        return
+
+    def script(self, game, user_id):
         """
-        Override this in subclasses to define what the card does.
+        Default: one automatic apply step that calls `affect_board`.
+        Subclasses can override to return multi-step scripts.
         """
-        pass
+        return [StepSpec(kind="apply_effect", apply_method="affect_board")]
 
     def to_dict(self):
         base = super().to_dict()

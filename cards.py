@@ -1,8 +1,6 @@
 from card_types import Monster, Sorcery, Land
-
-# prompt - great, now let's generate some images, they should be high quality, square
-#
-# style should be evocative of old school anime, but also old school western animation, though very realistic and very stylized, little line work, full body shots, and a lot of camera perspective, let's try bonecrawler first
+from game import StepSpec
+import time
 
 class Bonecrawler(Monster):  # Formerly: Pawn
     name = "Bonecrawler"
@@ -308,365 +306,6 @@ class CelestialTitan(Monster):
 
 
 
-class BlazingRain(Sorcery):
-    name = 'Blazing Rain'
-    text = "Weaken all opponent's DEF by 50."
-    activation_needs = ["back"]
-    role = "red"
-    def __init__(self, owner):
-        super().__init__('blazing_rain', owner, image='/static/cards/blazing_rain.png', mana=3)
-
-
-    def affect_board(self, game, target_pos, user_id):
-        for row in game.board:
-            for i, card in enumerate(row):
-                if card and card.owner != user_id and isinstance(card, Monster):
-                    card.defense -= 50
-                    if card.defense <= 0:
-                        game.graveyard[card.owner].append(card)
-                        row[i] = None
-
-
-class NaturesResurgence(Sorcery):
-    name = 'Natures Resurgence'
-    text = 'Increase the DEF of your monsters by 30.'
-    activation_needs = [ "forward-right"]
-    role = "white"
-    def __init__(self, owner):
-        super().__init__('natures_resurgence', owner, image='/static/cards/natures_resurgence.png', mana=1)
-
-    def affect_board(self, game, target_pos, user_id):
-        for row in game.board:
-            for card in row:
-                if card and card.owner == user_id and isinstance(card, Monster):
-                    card.defense += 30
-
-
-class MysticDraw(Sorcery):
-    name = 'Mystic Draw'
-    text = 'Draw 2 cards.'
-    activation_needs = ["left", "back"]
-    role = "blue"
-    def __init__(self, owner):
-        super().__init__('mystic_draw', owner, image='/static/cards/mystic_draw.png', mana=2)
-
-    def affect_board(self, game, target_pos, user_id):
-        for _ in range(2):
-            if game.decks[user_id]:
-                game.hands[user_id].append(game.decks[user_id].pop(0))
-#
-
-class DivineReset(Sorcery):
-    name = 'Divine Reset'
-    text = 'Destroy all monsters on the field.'
-    activation_needs = ['left', 'right']
-    role = "black"
-    def __init__(self, owner):
-        super().__init__(
-            card_id='divine_reset',
-            owner=owner,
-            image='/static/cards/divine_reset.png',
-            mana=2
-        )
-
-    def affect_board(self, game, target_pos, user_id):
-        for row in game.board:
-            for i, card in enumerate(row):
-                if card and isinstance(card, Monster):
-                    game.graveyard[card.owner].append(card)
-                    row[i] = None
-
-
-class ArcaneTempest(Sorcery):
-    name = 'Arcane Tempest'
-    text = "Reduce all opponent's ATK by 40."
-    activation_needs = ['back-right']
-    role = "white"
-    def __init__(self, owner):
-        super().__init__('arcane_tempest', owner, image='/static/cards/arcane_tempest.png', mana=2)
-
-    def affect_board(self, game, target_pos, user_id):
-        for row in game.board:
-            for card in row:
-                if card and card.owner != user_id and isinstance(card, Monster):
-                    card.attack -= 40
-
-
-
-
-class SilentRecruiter(Sorcery):
-    name = "Silent Recruiter"
-    text = "Choose monster with attack lower or equal to 180 from deck and add to hand."
-    activation_needs = ['back']
-    role = "white"
-    def __init__(self, owner):
-        super().__init__(
-            card_id="silent_recruiter",
-            owner=owner,
-            image="/static/cards/silent_recruiter.png",
-            mana=2
-        )
-
-    def requires_deck_tutoring(self):
-        return True
-
-    def get_valid_tutoring_targets(self, game, user_id):
-        target_deck = game.decks[self.owner]
-        valid_targets = []
-        for card in target_deck:
-            if card.type == 'monster':
-                if card.attack <= 180:
-                    valid_targets.append(card)
-        return valid_targets
-
-    def resolve_with_tutoring_input(self, card_id, game, user_id):
-        valid_targets = self.get_valid_tutoring_targets(game, user_id)
-        for card in valid_targets:
-            if card.id == card_id:
-                # Remove from deck and add to hand
-                game.decks[self.owner].remove(card)
-                game.hands[self.owner].append(card)
-                return True, f'{card.name} was added to your hand by {self.name}.'
-        return False, 'Invalid target for Silent Recruiter.'
-
-
-
-
-class OneMoreTrick(Sorcery):
-    name = "One More Trick"
-    text = "Choose a sorcery from deck and add to hand."
-    activation_needs = ['forward']
-    role = "blue"
-    def __init__(self, owner):
-        super().__init__(
-            card_id="one_more_trick",
-            owner=owner,
-            image="/static/cards/one_more_trick.png",
-            mana=3
-        )
-
-    def requires_deck_tutoring(self):
-        return True
-
-    def get_valid_tutoring_targets(self, game, user_id):
-        target_deck = game.decks[self.owner]
-        valid_targets = []
-        for card in target_deck:
-            if card.type == 'sorcery':
-                valid_targets.append(card)
-        return valid_targets
-
-    def resolve_with_tutoring_input(self, card_id, game, user_id):
-        valid_targets = self.get_valid_tutoring_targets(game, user_id)
-        for card in valid_targets:
-            if card.id == card_id:
-                # Remove from deck and add to hand
-                game.decks[self.owner].remove(card)
-                game.hands[self.owner].append(card)
-                return True, f'{card.name} was added to your hand by {self.name}.'
-        return False, 'Invalid target for Silent Recruiter.'
-
-
-class WanderersCompass(Sorcery):
-    name = "Wanderer's Compass"
-    text = "Choose a blue sorcery from deck and add to hand."
-    activation_needs = ['left']
-    role = "blue"
-    def __init__(self, owner):
-        super().__init__(
-            card_id="wanderers_compass",
-            owner=owner,
-            image="/static/cards/wanderers_compass.png",
-            mana=2
-        )
-
-    def requires_deck_tutoring(self):
-        return True
-
-    def get_valid_tutoring_targets(self, game, user_id):
-        target_deck = game.decks[self.owner]
-        valid_targets = []
-        for card in target_deck:
-            if card.type == 'sorcery' and card.role == 'blue':
-                valid_targets.append(card)
-        return valid_targets
-
-    def resolve_with_tutoring_input(self, card_id, game, user_id):
-        valid_targets = self.get_valid_tutoring_targets(game, user_id)
-        for card in valid_targets:
-            if card.id == card_id:
-                # Remove from deck and add to hand
-                game.decks[self.owner].remove(card)
-                game.hands[self.owner].append(card)
-                return True, f'{card.name} was added to your hand by {self.name}.'
-        return False, 'Invalid target for Silent Recruiter.'
-
-
-class TargetedDestruction(Sorcery):
-    name = "Targeted Destruction"
-    text = "Choose and destroy an enemy monster."
-    activation_needs = ['forward-right']
-    role = "black"
-    def __init__(self, owner):
-        super().__init__(
-            card_id="targeted_destruction",
-            owner=owner,
-            image="/static/cards/targeted_destruction.png",
-            mana=2
-        )
-
-    def requires_additional_input(self):
-        return True
-
-    def get_valid_targets(self, game, user_id):
-        return [
-            [x, y] for x, row in enumerate(game.board)
-            for y, card in enumerate(row)
-            if card and card.owner != user_id and isinstance(card, Monster)
-        ]
-
-    def resolve_with_input(self, game, user_id, pos):
-        x, y = pos
-        card = game.board[x][y]
-        if card and card.owner != user_id:
-            game.graveyard[card.owner].append(card)
-            game.board[x][y] = None
-            return True, 'Targeted Destruction has resolved'
-        else:
-            return False, 'Invalid target'
-
-
-class EmpoweringLight(Sorcery):
-    name = "Empowering Light"
-    text = "Choose a monster to increase its ATK by 50."
-    activation_needs = ['back-left']  # Optional highlight rules
-    role = "white"
-    def __init__(self, owner):
-        super().__init__(
-            card_id="empowering_light",
-            owner=owner,
-            image="/static/cards/empowering_light.png",
-            mana=2
-        )
-
-    def requires_additional_input(self):
-        return True
-
-    def get_valid_targets(self, game, user_id):
-        return [
-            [x, y]
-            for x, row in enumerate(game.board)
-            for y, card in enumerate(row)
-            if card and isinstance(card, Monster)
-        ]
-
-    def resolve_with_input(self, game, user_id, pos):
-        x, y = pos
-        card = game.board[x][y]
-        if card:
-            card.attack += 50
-            return True, f"{card.name} gained 500 ATK!"
-        return False, "Invalid target"
-
-
-class FrostbiteCurse(Sorcery):
-    name = "Frostbite Curse"
-    text = "Choose a monster to decrease its DEF by 30."
-    activation_needs = ['forward']
-    role = "red"
-    def __init__(self, owner):
-        super().__init__(
-            card_id="frostbite_curse",
-            owner=owner,
-            image="/static/cards/frostbite_curse.png",
-            mana=2
-        )
-
-    def requires_additional_input(self):
-        return True
-
-    def get_valid_targets(self, game, user_id):
-        return [
-            [x, y]
-            for x, row in enumerate(game.board)
-            for y, card in enumerate(row)
-            if card and isinstance(card, Monster)
-        ]
-
-    def resolve_with_input(self, game, user_id, pos):
-        x, y = pos
-        card = game.board[x][y]
-        if card:
-            card.defense -= 30
-            return True, f"{card.name} lost 300 DEF!"
-        return False, "Invalid target"
-
-
-class MindSeize(Sorcery):
-    name = "Mind Seize"
-    text = "Choose an enemy monster to take control of it."
-    activation_needs = ['back']
-    role = "red"
-    def __init__(self, owner):
-        super().__init__(
-            card_id="mind_seize",
-            owner=owner,
-            image="/static/cards/mind_seize.png",
-            mana=2
-        )
-
-    def requires_additional_input(self):
-        return True
-
-    def get_valid_targets(self, game, user_id):
-        return [
-            [x, y]
-            for x, row in enumerate(game.board)
-            for y, card in enumerate(row)
-            if card and card.owner != user_id and isinstance(card, Monster)
-        ]
-
-    def resolve_with_input(self, game, user_id, pos):
-        x, y = pos
-        card = game.board[x][y]
-        if card and card.owner != user_id:
-            card.owner = user_id
-            return True, f"You took control of {card.name}!"
-        return False, "Invalid target"
-
-
-class PowerSurge(Sorcery):
-    name = "Power Surge"
-    text = "Choose a monster to double its ATK and DEF."
-    activation_needs = ['forward']
-    role = "red"
-    def __init__(self, owner):
-        super().__init__(
-            card_id="power_surge",
-            owner=owner,
-            image="/static/cards/power_surge.png",
-            mana=2
-        )
-
-    def requires_additional_input(self):
-        return True
-
-    def get_valid_targets(self, game, user_id):
-        return [
-            [x, y]
-            for x, row in enumerate(game.board)
-            for y, card in enumerate(row)
-            if card and isinstance(card, Monster)
-        ]
-
-    def resolve_with_input(self, game, user_id, pos):
-        x, y = pos
-        card = game.board[x][y]
-        if card:
-            card.attack *= 2
-            card.defense *= 2
-            return True, f"{card.name}'s ATK and DEF were doubled!"
-        return False, "Invalid target"
 
 class VolcanicRift(Land):
     name = "Volcanic Rift"
@@ -977,92 +616,8 @@ class WardOfCensure(Land):
 # SORCERIES (tutoring, land control, role synergies)
 # =========================
 
-class MonarchsSummons(Sorcery):
-    name = "Monarch's Summons"
-    text = "Tutor a red monster with ATK ≥ 200 from your deck to your hand."
-    activation_needs = ["right"]  # position-gated like your other sorceries
-    role = "red"
-
-    def __init__(self, owner):
-        super().__init__('monarchs_summons', owner, image='/static/cards/monarchs_summons.png', mana=2)
-
-    def requires_deck_tutoring(self):
-        return True
-
-    def get_valid_tutoring_targets(self, game, user_id):
-        out = []
-        for card in game.decks[self.owner]:
-            if card.type == 'monster' and getattr(card, "role", None) == "red" and getattr(card, "attack", 0) >= 200:
-                out.append(card)
-        return out
-
-    def resolve_with_tutoring_input(self, card_id, game, user_id):
-        for c in list(game.decks[self.owner]):
-            if c.id == card_id:
-                game.decks[self.owner].remove(c)
-                game.hands[self.owner].append(c)
-                return True, f"{c.name} added to your hand."
-        return False, "Invalid target."
 
 
-class HexOfInversion(Sorcery):
-    name = "Hex of Inversion"
-    text = "Choose a monster; swap its ATK and DEF."
-    activation_needs = ["back-right"]
-    role = "black"
-
-    def __init__(self, owner):
-        super().__init__('hex_of_inversion', owner, image='/static/cards/hex_of_inversion.png', mana=2)
-
-    def requires_additional_input(self):
-        return True
-
-    def get_valid_targets(self, game, user_id):
-        return [
-            [x, y] for x, row in enumerate(game.board)
-            for y, card in enumerate(row)
-            if card and isinstance(card, Monster)
-        ]
-
-    def resolve_with_input(self, game, user_id, pos):
-        x, y = pos
-        card = game.board[x][y]
-        if card and isinstance(card, Monster):
-            card.attack, card.defense = card.defense, card.attack
-            return True, f"{card.name}'s ATK and DEF were inverted!"
-        return False, "Invalid target"
-
-
-class Overcharge(Sorcery):
-    name = "Overcharge"
-    text = "Choose your monster; it gains +100 ATK and loses 50 DEF."
-    activation_needs = ["forward-left"]
-    role = "red"
-
-    def __init__(self, owner):
-        super().__init__('overcharge', owner, image='/static/cards/overcharge.png', mana=1)
-
-    def requires_additional_input(self):
-        return True
-
-    def get_valid_targets(self, game, user_id):
-        return [
-            [x, y] for x, row in enumerate(game.board)
-            for y, card in enumerate(row)
-            if card and card.owner == user_id and isinstance(card, Monster)
-        ]
-
-    def resolve_with_input(self, game, user_id, pos):
-        x, y = pos
-        card = game.board[x][y]
-        if card and card.owner == user_id:
-            card.attack += 100
-            card.defense -= 50
-            if card.defense <= 0:
-                game.graveyard[card.owner].append(card)
-                game.board[x][y] = None
-            return True, f"{card.name} surges with power!"
-        return False, "Invalid target"
 
 
 class TideOfKnowledge(Sorcery):
@@ -1086,6 +641,425 @@ class TideOfKnowledge(Sorcery):
                 game.hands[user_id].append(game.decks[user_id].pop(0))
 
 
+
+
+class RiteOfReclamation(Sorcery):
+    name = "Rite of Reclamation"
+    text = "Discard a card; destroy an enemy monster; bring back a monster from your graveyard."
+    activation_needs = ["forward"]
+    role = "black"
+
+    def __init__(self, owner):
+        super().__init__('rite_of_reclamation', owner, image='/static/cards/rite.png', mana=3)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="discard_from_hand", owner="self", zone="hand", as_key="discarded"),
+            StepSpec(kind="select_board_target", owner="opponent", zone="board",
+                     filter={"require_enemy": True, "require_monster": True}, as_key="kill_pos"),
+            StepSpec(kind="apply_effect", apply_method="do_kill"),
+            StepSpec(kind="select_graveyard_card", owner="self", zone="graveyard",
+                     filter={"type": "monster"}, as_key="revive_card"),
+            StepSpec(kind="apply_effect", apply_method="do_revive"),
+        ]
+
+    # apply bodies called by the engine
+    def do_kill(self, game, _pos, user_id):
+        x, y = game.interaction.temp["kill_pos"]
+        target = game.board[x][y]
+        if target:
+            game.graveyard[target.owner].append(target)
+            game.board[x][y] = None
+
+    def do_revive(self, game, _pos, user_id):
+        cid = game.interaction.temp["revive_card"]
+        # pull the card instance back from graveyard
+        pool = game.graveyard[user_id]
+        for i, c in enumerate(pool):
+            if c.id == cid:
+                pool.pop(i)
+                # put revived monster to hand (or spawn to a default zone; your choice)
+                game.hands[user_id].append(c)
+                break
+
+
+
+
+class BlazingRain(Sorcery):
+    name = 'Blazing Rain'
+    text = "Weaken all opponent's DEF by 50."
+    activation_needs = ["back"]
+    role = "red"
+    def __init__(self, owner):
+        super().__init__('blazing_rain', owner, image='/static/cards/blazing_rain.png', mana=3)
+
+
+    def affect_board(self, game, target_pos, user_id):
+        for row in game.board:
+            for i, card in enumerate(row):
+                if card and card.owner != user_id and isinstance(card, Monster):
+                    card.defense -= 50
+                    if card.defense <= 0:
+                        game.graveyard[card.owner].append(card)
+                        row[i] = None
+
+
+class NaturesResurgence(Sorcery):
+    name = 'Natures Resurgence'
+    text = 'Increase the DEF of your monsters by 30.'
+    activation_needs = [ "forward-right"]
+    role = "white"
+    def __init__(self, owner):
+        super().__init__('natures_resurgence', owner, image='/static/cards/natures_resurgence.png', mana=1)
+
+    def affect_board(self, game, target_pos, user_id):
+        for row in game.board:
+            for card in row:
+                if card and card.owner == user_id and isinstance(card, Monster):
+                    card.defense += 30
+
+
+class MysticDraw(Sorcery):
+    name = 'Mystic Draw'
+    text = 'Draw 2 cards.'
+    activation_needs = ["left", "back"]
+    role = "blue"
+    def __init__(self, owner):
+        super().__init__('mystic_draw', owner, image='/static/cards/mystic_draw.png', mana=2)
+
+    def affect_board(self, game, target_pos, user_id):
+        for _ in range(2):
+            if game.decks[user_id]:
+                game.hands[user_id].append(game.decks[user_id].pop(0))
+#
+
+class DivineReset(Sorcery):
+    name = 'Divine Reset'
+    text = 'Destroy all monsters on the field.'
+    activation_needs = ['left', 'right']
+    role = "black"
+    def __init__(self, owner):
+        super().__init__(
+            card_id='divine_reset',
+            owner=owner,
+            image='/static/cards/divine_reset.png',
+            mana=2
+        )
+
+    def affect_board(self, game, target_pos, user_id):
+        for row in game.board:
+            for i, card in enumerate(row):
+                if card and isinstance(card, Monster):
+                    game.graveyard[card.owner].append(card)
+                    row[i] = None
+
+
+class ArcaneTempest(Sorcery):
+    name = 'Arcane Tempest'
+    text = "Reduce all opponent's ATK by 40."
+    activation_needs = ['back-right']
+    role = "white"
+    def __init__(self, owner):
+        super().__init__('arcane_tempest', owner, image='/static/cards/arcane_tempest.png', mana=2)
+
+    def affect_board(self, game, target_pos, user_id):
+        for row in game.board:
+            for card in row:
+                if card and card.owner != user_id and isinstance(card, Monster):
+                    card.attack -= 40
+
+
+
+
+class SilentRecruiter(Sorcery):
+    name = "Silent Recruiter"
+    text = "Choose monster with attack lower or equal to 180 from deck and add to hand."
+    activation_needs = ['back']
+    role = "white"
+    def __init__(self, owner):
+        super().__init__(
+            card_id="silent_recruiter",
+            owner=owner,
+            image="/static/cards/silent_recruiter.png",
+            mana=2
+        )
+
+    def script(self, game, user_id):
+        # Build a dynamic filter the FE can also use to pre-highlight
+        return [
+            StepSpec(kind="select_deck_card", owner="self", zone="deck",
+                     filter={"type":"monster", "max_attack":180}, as_key="pick"),
+            StepSpec(kind="apply_effect", apply_method="add_picked_to_hand")
+        ]
+
+    def add_picked_to_hand(self, game, _pos, user_id):
+        cid = game.interaction.temp["pick"]
+        deck = game.decks[user_id]
+        for i, c in enumerate(deck):
+            if c.id == cid:
+                deck.pop(i)
+                game.hands[user_id].append(c)
+                return
+
+
+
+
+
+
+
+
+
+class MonarchsSummons(Sorcery):
+    name = "Monarch's Summons"
+    text = "Tutor a red monster with ATK ≥ 200 from your deck to your hand."
+    activation_needs = ["right"]
+    role = "red"
+
+    def __init__(self, owner):
+        super().__init__('monarchs_summons', owner, image='/static/cards/monarchs_summons.png', mana=2)
+
+    def script(self, game, user_id):
+        # Note: UI uses the filter to pre-highlight. We'll re-check in apply.
+        return [
+            StepSpec(kind="select_deck_card", owner="self", zone="deck",
+                     filter={"type": "monster", "role": "red", "min_attack": 200}, as_key="pick"),
+            StepSpec(kind="apply_effect", apply_method="add_picked_to_hand")
+        ]
+
+    def add_picked_to_hand(self, game, _pos, user_id):
+        cid = game.interaction.temp["pick"]
+        deck = game.decks[user_id]
+        for i, c in enumerate(deck):
+            if c.id == cid and c.type == 'monster' and getattr(c, "role", None) == "red" and getattr(c, "attack", 0) >= 200:
+                deck.pop(i)
+                game.hands[user_id].append(c)
+                return
+
+class OneMoreTrick(Sorcery):
+    name = "One More Trick"
+    text = "Choose a sorcery from deck and add to hand."
+    activation_needs = ['forward']
+    role = "blue"
+
+    def __init__(self, owner):
+        super().__init__('one_more_trick', owner, image="/static/cards/one_more_trick.png", mana=3)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_deck_card", owner="self", zone="deck",
+                     filter={"type": "sorcery"}, as_key="pick"),
+            StepSpec(kind="apply_effect", apply_method="add_picked_to_hand"),
+        ]
+
+    def add_picked_to_hand(self, game, _pos, user_id):
+        cid = game.interaction.temp["pick"]
+        deck = game.decks[user_id]
+        for i, c in enumerate(deck):
+            if c.id == cid and c.type == 'sorcery':
+                deck.pop(i)
+                game.hands[user_id].append(c)
+                return
+
+class WanderersCompass(Sorcery):
+    name = "Wanderer's Compass"
+    text = "Choose a blue sorcery from deck and add to hand."
+    activation_needs = ['left']
+    role = "blue"
+
+    def __init__(self, owner):
+        super().__init__('wanderers_compass', owner, image="/static/cards/wanderers_compass.png", mana=2)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_deck_card", owner="self", zone="deck",
+                     filter={"type": "sorcery", "role": "blue"}, as_key="pick"),
+            StepSpec(kind="apply_effect", apply_method="add_picked_to_hand"),
+        ]
+
+    def add_picked_to_hand(self, game, _pos, user_id):
+        cid = game.interaction.temp["pick"]
+        deck = game.decks[user_id]
+        for i, c in enumerate(deck):
+            if c.id == cid and c.type == 'sorcery' and getattr(c, "role", None) == "blue":
+                deck.pop(i)
+                game.hands[user_id].append(c)
+                return
+
+
+# --- TARGET A BOARD MONSTER (ANY/ENEMY/ALLY) -------------------------------
+
+class HexOfInversion(Sorcery):
+    name = "Hex of Inversion"
+    text = "Choose a monster; swap its ATK and DEF."
+    activation_needs = ["back-right"]
+    role = "black"
+
+    def __init__(self, owner):
+        super().__init__('hex_of_inversion', owner, image='/static/cards/hex_of_inversion.png', mana=2)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_board_target", owner="any", zone="board",
+                     filter={"require_monster": True}, as_key="pos"),
+            StepSpec(kind="apply_effect", apply_method="do_invert")
+        ]
+
+    def do_invert(self, game, _pos, user_id):
+        x, y = game.interaction.temp["pos"]
+        card = game.board[x][y]
+        if card and isinstance(card, Monster):
+            card.attack, card.defense = card.defense, card.attack
+
+
+class Overcharge(Sorcery):
+    name = "Overcharge"
+    text = "Choose your monster; it gains +100 ATK and loses 50 DEF."
+    activation_needs = ["forward-left"]
+    role = "red"
+
+    def __init__(self, owner):
+        super().__init__('overcharge', owner, image='/static/cards/overcharge.png', mana=1)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_board_target", owner="self", zone="board",
+                     filter={"require_monster": True}, as_key="pos"),
+            StepSpec(kind="apply_effect", apply_method="do_buff")
+        ]
+
+    def do_buff(self, game, _pos, user_id):
+        x, y = game.interaction.temp["pos"]
+        card = game.board[x][y]
+        if card and card.owner == user_id:
+            card.attack += 100
+            card.defense -= 50
+            if card.defense <= 0:
+                game.graveyard[card.owner].append(card)
+                game.board[x][y] = None
+
+
+class TargetedDestruction(Sorcery):
+    name = "Targeted Destruction"
+    text = "Choose and destroy an enemy monster."
+    activation_needs = ['forward-right']
+    role = "black"
+
+    def __init__(self, owner):
+        super().__init__('targeted_destruction', owner, image='/static/cards/targeted_destruction.png', mana=2)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_board_target", owner="opponent", zone="board",
+                     filter={"require_enemy": True, "require_monster": True}, as_key="pos"),
+            StepSpec(kind="apply_effect", apply_method="do_kill")
+        ]
+
+    def do_kill(self, game, _pos, user_id):
+        x, y = game.interaction.temp["pos"]
+        card = game.board[x][y]
+        if card and card.owner != user_id:
+            game.graveyard[card.owner].append(card)
+            game.board[x][y] = None
+
+
+class EmpoweringLight(Sorcery):
+    name = "Empowering Light"
+    text = "Choose a monster to increase its ATK by 50."
+    activation_needs = ['back-left']
+    role = "white"
+
+    def __init__(self, owner):
+        super().__init__('empowering_light', owner, image='/static/cards/empowering_light.png', mana=2)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_board_target", owner="any", zone="board",
+                     filter={"require_monster": True}, as_key="pos"),
+            StepSpec(kind="apply_effect", apply_method="do_buff")
+        ]
+
+    def do_buff(self, game, _pos, user_id):
+        x, y = game.interaction.temp["pos"]
+        card = game.board[x][y]
+        if card and isinstance(card, Monster):
+            card.attack += 50
+
+
+class FrostbiteCurse(Sorcery):
+    name = "Frostbite Curse"
+    text = "Choose a monster to decrease its DEF by 30."
+    activation_needs = ['forward']
+    role = "red"
+
+    def __init__(self, owner):
+        super().__init__('frostbite_curse', owner, image='/static/cards/frostbite_curse.png', mana=2)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_board_target", owner="any", zone="board",
+                     filter={"require_monster": True}, as_key="pos"),
+            StepSpec(kind="apply_effect", apply_method="do_nerf")
+        ]
+
+    def do_nerf(self, game, _pos, user_id):
+        x, y = game.interaction.temp["pos"]
+        card = game.board[x][y]
+        if card and isinstance(card, Monster):
+            card.defense -= 30
+            if card.defense <= 0:
+                game.graveyard[card.owner].append(card)
+                game.board[x][y] = None
+
+
+class MindSeize(Sorcery):
+    name = "Mind Seize"
+    text = "Choose an enemy monster to take control of it."
+    activation_needs = ['back']
+    role = "red"
+
+    def __init__(self, owner):
+        super().__init__('mind_seize', owner, image='/static/cards/mind_seize.png', mana=2)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_board_target", owner="opponent", zone="board",
+                     filter={"require_enemy": True, "require_monster": True}, as_key="pos"),
+            StepSpec(kind="apply_effect", apply_method="do_steal")
+        ]
+
+    def do_steal(self, game, _pos, user_id):
+        x, y = game.interaction.temp["pos"]
+        card = game.board[x][y]
+        if card and card.owner != user_id:
+            card.owner = user_id
+
+
+class PowerSurge(Sorcery):
+    name = "Power Surge"
+    text = "Choose a monster to double its ATK and DEF."
+    activation_needs = ['forward']
+    role = "red"
+
+    def __init__(self, owner):
+        super().__init__('power_surge', owner, image='/static/cards/power_surge.png', mana=2)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_board_target", owner="any", zone="board",
+                     filter={"require_monster": True}, as_key="pos"),
+            StepSpec(kind="apply_effect", apply_method="do_double")
+        ]
+
+    def do_double(self, game, _pos, user_id):
+        x, y = game.interaction.temp["pos"]
+        card = game.board[x][y]
+        if card and isinstance(card, Monster):
+            card.attack *= 2
+            card.defense *= 2
+
+
+# --- LAND TARGETING ---------------------------------------------------------
+
 class ConsecrateGround(Sorcery):
     name = "Consecrate Ground"
     text = "Destroy an enemy land."
@@ -1095,24 +1069,21 @@ class ConsecrateGround(Sorcery):
     def __init__(self, owner):
         super().__init__('consecrate_ground', owner, image='/static/cards/consecrate_ground.png', mana=2)
 
-    def requires_additional_input(self):
-        return True
-
-    def get_valid_targets(self, game, user_id):
+    def script(self, game, user_id):
         return [
-            [x, y] for x, row in enumerate(game.land_board)
-            for y, land in enumerate(row)
-            if land and land.owner != user_id
+            StepSpec(kind="select_land_target", owner="opponent", zone="land",
+                     as_key="pos"),
+            StepSpec(kind="apply_effect", apply_method="do_shatter")
         ]
 
-    def resolve_with_input(self, game, user_id, pos):
-        x, y = pos
+    def do_shatter(self, game, _pos, user_id):
+        x, y = game.interaction.temp["pos"]
         land = game.land_board[x][y]
         if land and land.owner != user_id:
             game.land_board[x][y] = None
-            return True, "The enemy land crumbles to dust."
-        return False, "Invalid target"
 
+
+# --- SACRIFICE / COSTED SELECTION ------------------------------------------
 
 class BloodTithe(Sorcery):
     name = "Blood Tithe"
@@ -1123,22 +1094,58 @@ class BloodTithe(Sorcery):
     def __init__(self, owner):
         super().__init__('blood_tithe', owner, image='/static/cards/blood_tithe.png', mana=1)
 
-    def requires_additional_input(self):
-        return True
-
-    def get_valid_targets(self, game, user_id):
+    def script(self, game, user_id):
         return [
-            [x, y] for x, row in enumerate(game.board)
-            for y, card in enumerate(row)
-            if card and card.owner == user_id and isinstance(card, Monster)
+            StepSpec(kind="select_board_target", owner="self", zone="board",
+                     filter={"require_monster": True}, as_key="sac"),
+            StepSpec(kind="apply_effect", apply_method="do_sac_gain")
         ]
 
-    def resolve_with_input(self, game, user_id, pos):
-        x, y = pos
+    def do_sac_gain(self, game, _pos, user_id):
+        print(f"[CARD] {time.time():.6f} do_sac_gain user={user_id} temp_keys={list(game.interaction.temp.keys()) if game.interaction else 'NO-IXN'}")
+        x, y = game.interaction.temp["sac"]
         card = game.board[x][y]
+        print(f"[CARD] {time.time():.6f} sac at {(x, y)} card={getattr(card, 'id', None)} owner={getattr(card, 'owner', None)} mana_before={game.mana[user_id]}")
         if card and card.owner == user_id:
             game.graveyard[user_id].append(card)
             game.board[x][y] = None
             game.mana[user_id] = game.mana.get(user_id, 0) + 2
-            return True, "The ritual grants you power."
-        return False, "Invalid target"
+
+
+# --- MULTI-STEP EXAMPLE (already good) -------------------------------------
+
+class RiteOfReclamation(Sorcery):
+    name = "Rite of Reclamation"
+    text = "Discard a card; destroy an enemy monster; bring back a monster from your graveyard."
+    activation_needs = ["forward"]
+    role = "black"
+
+    def __init__(self, owner):
+        super().__init__('rite_of_reclamation', owner, image='/static/cards/rite.png', mana=3)
+
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="discard_from_hand", owner="self", zone="hand", as_key="discarded"),
+            StepSpec(kind="select_board_target", owner="opponent", zone="board",
+                     filter={"require_enemy": True, "require_monster": True}, as_key="kill_pos"),
+            StepSpec(kind="apply_effect", apply_method="do_kill"),
+            StepSpec(kind="select_graveyard_card", owner="self", zone="graveyard",
+                     filter={"type": "monster"}, as_key="revive_card"),
+            StepSpec(kind="apply_effect", apply_method="do_revive"),
+        ]
+
+    def do_kill(self, game, _pos, user_id):
+        x, y = game.interaction.temp["kill_pos"]
+        target = game.board[x][y]
+        if target:
+            game.graveyard[target.owner].append(target)
+            game.board[x][y] = None
+
+    def do_revive(self, game, _pos, user_id):
+        cid = game.interaction.temp["revive_card"]
+        pool = game.graveyard[user_id]
+        for i, c in enumerate(pool):
+            if c.id == cid:
+                pool.pop(i)
+                game.hands[user_id].append(c)
+                break

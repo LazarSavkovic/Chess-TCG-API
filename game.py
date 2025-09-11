@@ -1,10 +1,14 @@
 
 from card_types import evaluate_creation_or_activation_needs
 from random import shuffle
-from util import get_playable_card_classes
 from card_types import Monster, Sorcery, Land
-# game.py
 import re
+from typing import Any, Dict, List, Optional, Tuple
+from interactions import StepSpec, PendingInteraction, StepKind
+import time
+
+
+
 
 def _all_subclasses(cls):
     out = set()
@@ -118,6 +122,8 @@ class ChessGame:
         self.summoned_this_turn = set()
         self.sorcery_used_this_turn = set()
         self.land_placed_this_turn = set()
+        self.interaction: Optional[PendingInteraction] = None
+        self.stack: List[Dict[str, Any]] = []  # purely visual; FE can render if desired
 
     def reset_runtime_state(self):
         self.board = self.init_board()
@@ -131,6 +137,8 @@ class ChessGame:
         self.summoned_this_turn = set()
         self.sorcery_used_this_turn = set()
         self.land_placed_this_turn = set()
+        self.interaction = None
+        self.stack = []
 
     def apply_decks_and_start(self, deck_rows_p1, land_rows_p1, deck_rows_p2, land_rows_p2):
         """
@@ -150,6 +158,8 @@ class ChessGame:
             draw_n = min(5, len(self.decks[pid]))
             self.hands[pid] = [self.decks[pid].pop() for _ in range(draw_n)]
 
+    def _locked(self) -> bool:
+        return self.interaction is not None
 
     @staticmethod
     def get_valid_summon_positions(user_id):
@@ -161,6 +171,8 @@ class ChessGame:
             self.hands[user_id].append(self.decks[user_id].pop(0))
 
     def summon_card(self, slot_index, to_pos, user_id):
+        if self._locked():
+            return False, "A sorcery is resolving"
         if user_id != self.current_player:
             return False, "Not your turn"
         if user_id in self.summoned_this_turn:
@@ -201,6 +213,8 @@ class ChessGame:
         return self.players[self.turn_index]
 
     def toggle_turn(self):
+        if self._locked():
+            return  # cannot end-turn while locked; the caller should be blocked too
 
         self.turn_index = (self.turn_index + 1) % len(self.players)
         self.moves_this_turn = 0
@@ -217,6 +231,8 @@ class ChessGame:
                     land.on_turn_start(self, (x, y), card)
 
     def can_move(self, user_id):
+        if self._locked():
+            return False
         return user_id == self.current_player and self.moves_this_turn < self.max_moves_per_turn
 
     def direct_attack(self, pos, user_id):
@@ -361,6 +377,247 @@ class ChessGame:
 
         # Optional fallback
         return False, "Unknown activation status", False
+
+    def begin_sorcery(self, slot_index: int, user_id: str, target_pos: Tuple[int, int], free: bool):
+        print(f"[GAME] {time.time():.6f} BEGIN slot={slot_index} user={user_id} free={free} target_pos={target_pos} ixn_pre={bool(self.interaction)}")
+        if self._locked():
+            return False, "Another interaction is in progress"
+
+        hand = self.hands[user_id]
+        if not (0 <= slot_index < len(hand)):
+            return False, "Invalid slot"
+
+        card = hand[slot_index]
+        self.stack.append({'type': 'sorcery', 'card_id': card.card_id, 'owner': user_id, 'status': 'resolving'})
+
+        if hasattr(card, "script"):
+            steps = card.script(self, user_id)
+        elif hasattr(card, "affect_board"):
+            steps = [StepSpec(kind="apply_effect", apply_method="affect_board")]
+        else:
+            steps = [StepSpec(kind="apply_effect", apply_method="no_op")]
+
+        self.interaction = PendingInteraction(
+            type="sorcery",
+            owner=user_id,
+            slot_index=slot_index,
+            card_id=card.card_id,
+            free=free,
+            pos=tuple(target_pos) if target_pos else None,
+            steps=steps,
+            cursor=0,
+            temp={}
+        )
+
+        print(
+            f"[GAME] {time.time():.6f} BEGIN set ixn cursor={self.interaction.cursor} steps={[(s.kind, s.apply_method) for s in self.interaction.steps]}")
+        status, _ = self._advance_auto_steps()
+        print(
+            f"[GAME] {time.time():.6f} BEGIN _advance_auto_steps -> status={status} cursor_now={self.interaction.cursor if self.interaction else 'N/A'}")
+        if status == "complete":
+            print(f"[GAME] {time.time():.6f} BEGIN finalize (auto-complete)")
+            self._finalize_sorcery()
+        return True, "Sorcery started"
+
+    def sorcery_step_input(self, user_id: str, payload: Dict[str, Any]):
+        print(f"[STEP_IN] {time.time():.6f} enter user={user_id} payload={payload} ixn_exists={bool(self.interaction)}")
+        ixn = self.interaction
+        print(ixn, 'ixn')
+        if not ixn or ixn.type != "sorcery":
+            return "error", "No sorcery is resolving"
+        if ixn.owner != user_id:
+            return "error", "Not your interaction"
+
+        step = ixn.current_step()
+        print(step, 'step current')
+        if not step:
+            return "error", "Nothing to resolve"
+
+        try:
+            if step.kind == "discard_from_hand":
+                idx = int(payload.get("hand_index"))
+                hand = self.hands[user_id]
+                if not (0 <= idx < len(hand)):
+                    return "error", "Invalid hand index"
+                card = hand.pop(idx)
+                self.graveyard[user_id].append(card)
+                if step.as_key:
+                    ixn.temp[step.as_key] = card.id
+
+            elif step.kind == "select_board_target":
+                pos = payload.get("pos")
+                if not (isinstance(pos, list) and len(pos) == 2):
+                    return "error", "Invalid target"
+                x, y = pos
+                if not (0 <= x < 6 and 0 <= y < 6):
+                    return "error", "Out of board"
+                target = self.board[x][y]
+                filt = step.filter or {}
+                if filt.get("require_enemy") and (not target or target.owner == user_id):
+                    return "error", "Must select enemy monster"
+                if filt.get("require_monster") and (not target or target.type != "monster"):
+                    return "error", "Must select a monster"
+                if step.as_key:
+                    ixn.temp[step.as_key] = (x, y)
+
+            elif step.kind == "select_graveyard_card":
+                cid = payload.get("card_id")
+                pool = self.graveyard[user_id] if (step.owner in (None, "self")) else self.graveyard[
+                    '2' if user_id == '1' else '1']
+                if not any(c.id == cid for c in pool):
+                    return "error", "Card not in graveyard"
+                if step.as_key:
+                    ixn.temp[step.as_key] = cid
+
+            elif step.kind == "select_deck_card":
+                cid = payload.get("card_id")
+                pool = self.decks[user_id] if (step.owner in (None, "self")) else self.decks[
+                    '2' if user_id == '1' else '1']
+                match = next((c for c in pool if c.id == cid), None)
+                if not match:
+                    return "error", "Card not in deck"
+                filt = step.filter or {}
+                if filt.get("type") and getattr(match, "type", None) != filt["type"]:
+                    return "error", "Invalid type"
+                if "max_attack" in filt and getattr(match, "attack", 0) > filt["max_attack"]:
+                    return "error", "Attack too high"
+                if "role" in filt and getattr(match, "role", None) != filt["role"]:
+                    return "error", "Wrong role"
+                if step.as_key:
+                    ixn.temp[step.as_key] = cid
+
+            elif step.kind == "pay_cost":
+                cost = step.cost or {}
+                mana_needed = int(cost.get("mana", 0))
+                if mana_needed > 0:
+                    if self.mana[user_id] < mana_needed:
+                        return "error", "Not enough mana"
+                    self.mana[user_id] -= mana_needed
+
+            elif step.kind == "apply_effect":
+                hand = self.hands[user_id]
+                if 0 <= ixn.slot_index < len(hand):
+                    card = hand[ixn.slot_index]
+                else:
+                    card = next((c for c in hand if c.card_id == ixn.card_id), None)
+                method = getattr(card, step.apply_method or "", None) if card else None
+                if callable(method):
+                    try:
+                        method(self, ixn.pos, user_id)
+                    except TypeError:
+                        method(self, user_id, ixn.temp)
+
+            else:
+                return "error", f"Unknown step kind: {step.kind}"
+
+        except Exception as e:
+            return "error", str(e)
+
+        print(f"[STEP_IN] {time.time():.6f} before advance cursor={ixn.cursor}")
+        ixn.advance()
+        print(f"[STEP_IN] {time.time():.6f} after advance cursor={ixn.cursor}")
+        status, arg = self._advance_auto_steps()
+        print(
+            f"[STEP_IN] {time.time():.6f} _advance_auto_steps -> status={status} cursor_now={self.interaction.cursor if self.interaction else 'N/A'}")
+        if status == "awaiting":
+            return "awaiting", "Next input needed"
+        if status == "complete":
+            print(f"[STEP_IN] {time.time():.6f} finalize (complete after input)")
+            self._finalize_sorcery()
+            print(f"[STEP_IN] {time.time():.6f} finalized ixn_exists={bool(self.interaction)}")
+            return "complete", "Sorcery resolved"
+        return "error", (arg or "Sorcery failed")
+
+    def _advance_auto_steps(self):
+        """
+        Run auto steps until we reach a prompt or finish.
+        Returns ("awaiting" | "complete" | "error", step_or_msg_or_none)
+        """
+        ixn = self.interaction
+        print(f"[AUTO] {time.time():.6f} enter ixn={bool(ixn)}")
+        if not ixn:
+            print(f"[AUTO] {time.time():.6f} -> complete(no ixn)")
+            return "complete", None
+
+        while True:
+            step = ixn.current_step()
+            print(f"[AUTO] {time.time():.6f} cursor={ixn.cursor} step={getattr(step, 'kind', None)}")
+            if not step:
+                print(f"[AUTO] {time.time():.6f} -> complete(no step)")
+                return "complete", None
+
+            # ---- AUTO: pay_cost ----
+            if step.kind == "pay_cost":
+                print(f"[AUTO] {time.time():.6f} pay_cost cost={step.cost} mana_before={self.mana[ixn.owner]}")
+                cost = step.cost or {}
+                mana_needed = int(cost.get("mana", 0))
+                if mana_needed:
+                    if self.mana[ixn.owner] < mana_needed:
+                        # abort on failure
+                        self.interaction = None
+                        # (optional) pop stack visual
+                        if self.stack: self.stack.pop()
+                        return "error", "Not enough mana"
+                    self.mana[ixn.owner] -= mana_needed
+                print(f"[AUTO] {time.time():.6f} pay_cost done mana_after={self.mana[ixn.owner]}")
+                ixn.advance()
+                continue
+
+            # ---- AUTO: apply_effect ----
+            if step.kind == "apply_effect":
+                print(f"[AUTO] {time.time():.6f} apply_effect method={step.apply_method} slot_index={ixn.slot_index}")
+                hand = self.hands[ixn.owner]
+                if 0 <= ixn.slot_index < len(hand):
+                    card = hand[ixn.slot_index]
+                else:
+                    card = next((c for c in hand if c.card_id == ixn.card_id), None)
+
+                if card:
+                    fn = getattr(card, step.apply_method or "", None)
+                    if callable(fn):
+                        try:
+                            # most cards: (game, pos, user_id)
+                            fn(self, ixn.pos, ixn.owner)
+                        except TypeError:
+                            # optional new signature: (game, user_id, temp)
+                            fn(self, ixn.owner, ixn.temp)
+                print(f"[AUTO] {time.time():.6f} apply_effect done")
+                ixn.advance()
+                continue
+            print(f"[AUTO] {time.time():.6f} awaiting kind={step.kind}")
+            # ---- PROMPT step: stop and wait for FE input ----
+            return "awaiting", step
+
+    def _finalize_sorcery(self):
+        print(f"[FINALIZE] {time.time():.6f} enter ixn_exists={bool(self.interaction)}")
+        ixn = self.interaction
+        if not ixn:
+            print(f"[FINALIZE] {time.time():.6f} nothing to do")
+            return
+        user_id = ixn.owner
+        hand = self.hands[user_id]
+        print(
+            f"[FINALIZE] {time.time():.6f} slot_index={ixn.slot_index} card_id={ixn.card_id} free={ixn.free} mana_before={self.mana[user_id]} hand_len_before={len(hand)}")
+        # defensive: slot may have shifted if user drew/removed—ensure bounds:
+        if 0 <= ixn.slot_index < len(hand):
+            card = hand.pop(ixn.slot_index)
+        else:
+            # fallback: find by card_id
+            card = next((c for c in hand if c.card_id == ixn.card_id), None)
+            if card:
+                hand.remove(card)
+        if card:
+            if not ixn.free:
+                self.mana[user_id] -= getattr(card, "mana", 0)
+            self.graveyard[user_id].append(card)
+        self.sorcery_used_this_turn.add(user_id)
+        # pop stack visual
+        if self.stack:
+            self.stack.pop()
+        # unlock
+        print(f"[FINALIZE] {time.time():.6f} done mana_after={self.mana[user_id]} hand_len_after={len(hand)}")
+        self.interaction = None
+        print(f"[FINALIZE] {time.time():.6f} cleared ixn -> {self.interaction}")
 
     def activate_sorcery(self, slot_index, user_id, target_pos, reduce_mana=True):
         hand = self.hands[user_id]

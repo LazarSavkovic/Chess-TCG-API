@@ -13,6 +13,9 @@ from cards import Monster, Land, Sorcery  # import your base classes
 # Both gave choices & readied -> validate & start
 from game import validate_deck_payload
 from simple_websocket.errors import ConnectionClosed
+import time
+from itertools import count
+WS_ID_COUNTER = count(1)  # 1,2,3,...
 
 
 
@@ -369,8 +372,103 @@ def _base_state(game):
         'land_decks': _ser_land_decks(game),
         'deck_sizes': _deck_sizes(game),
         'center_tile_control': game.center_tile_control,
-        'actions_this_turn': _actions_this_turn(game),  # ← add this
+        'actions_this_turn': _actions_this_turn(game),
+        'stack': game.stack,
+        'interaction': _ser_interaction(game.interaction, game)
     }
+
+
+def _ser_step(step: 'StepSpec'):
+    if not step:
+        return None
+    return {
+        'kind': step.kind,
+        'owner': step.owner,
+        'zone': step.zone,
+        'filter': step.filter,
+        'as_key': step.as_key,
+        'cost': step.cost,
+    }
+
+def _step_suggestions(game, ixn, step):
+    """Return a list the FE can use to render/choose (or [] if none)."""
+    owner = ixn.owner
+    if step.kind == "select_board_target":
+        out = []
+        for x, row in enumerate(game.board):
+            for y, c in enumerate(row):
+                if not c: continue
+                if step.filter and step.filter.get("require_monster") and getattr(c, "type", None) != "monster":
+                    continue
+                if step.owner == "self" and c.owner != owner:
+                    continue
+                if step.owner == "opponent" and c.owner == owner:
+                    continue
+                if step.filter and step.filter.get("require_enemy") and c.owner == owner:
+                    continue
+                out.append([x, y])
+        return out
+
+    if step.kind == "select_land_target":
+        out = []
+        for x, row in enumerate(game.land_board):
+            for y, land in enumerate(row):
+                if not land: continue
+                if step.owner == "self" and land.owner != owner:
+                    continue
+                if step.owner == "opponent" and land.owner == owner:
+                    continue
+                out.append([x, y])
+        return out
+
+    if step.kind == "select_deck_card":
+        deck = game.decks[owner]
+        filt = step.filter or {}
+        def ok(card):
+            if filt.get("type") and getattr(card, "type", None) != filt["type"]:
+                return False
+            if "role" in filt and getattr(card, "role", None) != filt["role"]:
+                return False
+            if "max_attack" in filt and getattr(card, "attack", None) is not None and card.attack > int(filt["max_attack"]):
+                return False
+            if "min_attack" in filt and getattr(card, "attack", None) is not None and card.attack < int(filt["min_attack"]):
+                return False
+            return True
+        return [c.to_dict() for c in deck if ok(c)]
+
+    if step.kind == "discard_from_hand":
+        # FE can just let the active player click any card in hand.
+        # (Return indices if you prefer: list(range(len(game.hands[owner]))))
+        return []
+
+    if step.kind == "pay_cost":
+        return []
+
+    if step.kind == "apply_effect":
+        return []
+
+    return []
+
+def _ser_interaction(ixn, game=None):
+    if not ixn:
+        return None
+    step = ixn.current_step()
+    awaiting = _ser_step(step) if step else None
+    if awaiting and game is not None:
+        awaiting = {**awaiting, "suggestions": _step_suggestions(game, ixn, step)}
+    return {
+        'type': ixn.type,
+        'owner': ixn.owner,
+        'card_id': ixn.card_id,
+        'slot_index': ixn.slot_index,
+        'free': ixn.free,
+        'pos': ixn.pos,
+        'cursor': ixn.cursor,
+        'awaiting': awaiting
+    }
+
+
+
 
 def _send(ws, msg_type, game, extra=None):
     payload = {'type': msg_type, **_base_state(game)}
@@ -415,6 +513,9 @@ def room(game_id):
 
 @sock.route('/game/<game_id>')
 def game(ws, game_id):
+    ws._id = next(WS_ID_COUNTER)
+    print(f"[WS] {time.time():.6f} OPEN conn_id={ws._id} game_id={game_id}")
+
     if game_id not in games:
         games[game_id] = ChessGame()
 
@@ -430,12 +531,16 @@ def game(ws, game_id):
             try:
                 message = ws.receive()
             except ConnectionClosed as cc:
+                print(f"[WS] {time.time():.6f} CLOSE conn_id={ws._id} reason=ConnectionClosed")
                 # Normal client disconnect (page change, StrictMode unmount, tab close, etc.)
                 break
 
 
             if not message:
+                print(f"[WS] {time.time():.6f} CLOSE conn_id={ws._id} reason=empty_message")
+
                 break
+            print(f"[WS] {time.time():.6f} RECV conn_id={ws._id} raw={message[:200]}")
 
             try:
                 data = json.loads(message)
@@ -463,6 +568,8 @@ def game(ws, game_id):
                     except Exception:
                         pass
                     continue
+                print(f"[WS] {time.time():.6f} IDENT conn_id={ws._id} username={incoming_username}")
+
                 print('incoming_username', incoming_username)
 
                 # Check if this username was already assigned a slot
@@ -513,6 +620,9 @@ def game(ws, game_id):
 
 
             elif data['type'] == 'move':
+                if game._locked():
+                    _send(ws, 'update', game, {'success': False, 'info': 'A sorcery is resolving'})
+                    continue
                 from_pos = data['from']
                 to_pos = data['to']
                 success, info = game.move(from_pos, to_pos, user_id)
@@ -540,6 +650,9 @@ def game(ws, game_id):
                     })
 
             elif (data['type'] == 'end-turn') or (data['type'] == 'end-turn-with-discard'):
+                if game._locked():
+                    _send(ws, 'update', game, {'success': False, 'info': 'A sorcery is resolving'})
+                    continue
                 if data['type'] == 'end-turn-with-discard':
                     discarded_card = game.hands[user_id].pop(data['slot'])
                     game.graveyard[user_id].append(discarded_card)
@@ -585,6 +698,9 @@ def game(ws, game_id):
                     })
 
             elif data['type'] == 'summon':
+                if game._locked():
+                    _send(ws, 'update', game, {'success': False, 'info': 'A sorcery is resolving'})
+                    continue
                 slot = data['slot']
                 to_pos = data['to']
                 success, info = game.summon_card(slot, to_pos, user_id)
@@ -610,6 +726,9 @@ def game(ws, game_id):
                     })
 
             elif data['type'] == 'direct-attack':
+                if game._locked():
+                    _send(ws, 'update', game, {'success': False, 'info': 'A sorcery is resolving'})
+                    continue
                 pos = data['pos']
                 success, info, game_over = game.direct_attack(pos, user_id)
                 x, y = pos
@@ -642,113 +761,41 @@ def game(ws, game_id):
                     })
 
             elif data['type'] == 'activate-sorcery':
-                if not user_id:
-                    continue  # or raise, or wait — don't access hands/cards yet
+                print(f"[WS] {ts:.6f} ACT conn_id={ws._id} user={user_id} slot={data.get('slot')} pos={data.get('pos')} ixn={bool(game.interaction)}")
 
+                if not user_id: continue
                 slot = data['slot']
-                pos = data.get('pos')  # optional
-                card = game.hands[user_id][slot]
-                success, info, is_free = game.game_can_activate_card(slot, user_id, pos)
-                print(data)
+                pos = data.get('pos')
+                ok, info, is_free = game.game_can_activate_card(slot, user_id, pos)
+                if not ok:
+                    _send(ws, 'update', game, {'success': False, 'info': info})
+                    continue
 
-                if not success:
-                    # Only notify the user who tried the move
-                    _send(ws, 'update', game, {
-                        'success': success,
-                        'pos': pos,
-                        'mana': game.mana,
-                        'info': info,
-                        'moves_left': game.max_moves_per_turn - game.moves_this_turn,
-                        'usernames': user_assignments[game_id],
-                    })
-                else:
-                    if callable(getattr(card, "requires_additional_input", None)) and card.requires_additional_input():
-                        valid_targets = card.get_valid_targets(game, user_id)
-                        _send(connected_users[game_id][user_id], 'awaiting-input', game, {
-                            'slot': slot,
-                            'success': True,
-                            'valid_targets': valid_targets,
-                            'card_id': card.card_id,
-                            'pos': pos,
-                            'card': card.to_dict(),
-                            'mana': game.mana,
-                            'info': f'{card.name} activated',
-                            'moves_left': game.moves_this_turn and (game.max_moves_per_turn - game.moves_this_turn) or game.max_moves_per_turn,
-                            'usernames': user_assignments[game_id],
-                        })
-                    elif callable(getattr(card, "requires_deck_tutoring", None)) and card.requires_deck_tutoring():
-                        valid_tutoring_targets = card.get_valid_tutoring_targets(game, user_id)
-                        _send(connected_users[game_id][user_id], 'awaiting-deck-tutoring', game, {
-                            'slot': slot,
-                            'success': True,
-                            'valid_tutoring_targets': [c.to_dict() for c in valid_tutoring_targets],
-                            'card_id': card.card_id,
-                            'mana': game.mana,
-                            'pos': pos,
-                            'info': f'{card.name} activated',
-                            'moves_left': game.max_moves_per_turn - game.moves_this_turn,
-                            'usernames': user_assignments[game_id],
-                        })
-                    else:
-                        # Regular activate logic
-                        success, info = game.activate_sorcery(slot, user_id, pos, reduce_mana=not is_free)
-                        _broadcast(game_id, 'update', game, {
-                            'success': success,
-                            'mana': game.mana,
-                            'card_id': card.card_id,
-                            'pos': pos,
-                            'info': info,
-                            'moves_left': game.max_moves_per_turn - game.moves_this_turn,
-                            'usernames': user_assignments[game_id],
-                        })
+                ok2, info2 = game.begin_sorcery(slot, user_id, pos, free=is_free)
+                _broadcast(game_id, 'update', game, {
+                    'success': ok2,
+                    'info': info2,
+                    'usernames': user_assignments[game_id],
+                    'moves_left': game.max_moves_per_turn - game.moves_this_turn,
+                })
 
-            elif data['type'] == 'resolve-sorcery':
-                slot = data['slot']
-                card = game.hands[user_id][slot]
-                pos = data.get('pos')  # optional
-                success, info, is_free = game.game_can_activate_card(slot, user_id, pos)
-                print(is_free, "is free")
+            elif data['type'] == 'sorcery-step':
+                print(data, 'sorcery step')
+                payload = data.get('payload') or {}
+                status, info = game.sorcery_step_input(user_id, payload)
+                ok = (status != "error")
+                _broadcast(game_id, 'update', game, {
+                    'success': ok,
+                    'info': info,
+                    'usernames': user_assignments[game_id],
+                    'moves_left': game.max_moves_per_turn - game.moves_this_turn,
+                })
 
-                if hasattr(card, "resolve_with_input"):
-                    target = data['target']
-                    # Try resolving first — don't remove card or spend mana yet
-                    success, info = card.resolve_with_input(game, user_id, target)
-                    if success:
-                        game.hands[user_id].pop(slot)
-                        game.graveyard[user_id].append(card)
-                        if not is_free:
-                            game.mana[user_id] -= card.mana
-                        game.sorcery_used_this_turn.add(user_id)
-
-                    _broadcast(game_id, 'update', game, {
-                        'success': success,
-                        'mana': game.mana,
-                        'info': info,
-                        'card_id': card.card_id,
-                        'pos': pos,
-                        'moves_left': game.max_moves_per_turn - game.moves_this_turn,
-                        'usernames': user_assignments[game_id],
-                    })
-
-                elif hasattr(card, "resolve_with_tutoring_input"):
-                    card_id = data['card_id']
-                    # Try resolving first — don't remove card or spend mana yet
-                    success, info = card.resolve_with_tutoring_input(card_id, game, user_id)
-                    if success:
-                        game.hands[user_id].pop(slot)
-                        game.graveyard[user_id].append(card)
-                        game.mana[user_id] -= card.mana
-                        game.sorcery_used_this_turn.add(user_id)
-
-                    _broadcast(game_id, 'update', game, {
-                        'success': success,
-                        'mana': game.mana,
-                        'info': info,
-                        'moves_left': game.max_moves_per_turn - game.moves_this_turn,
-                        'usernames': user_assignments[game_id],
-                    })
 
             elif data['type'] == 'place-land':
+                if game._locked():
+                    _send(ws, 'update', game, {'success': False, 'info': 'A sorcery is resolving'})
+                    continue
                 print(data)
                 if not user_id:
                     continue  # or raise, or wait — don't access hands/cards yet
@@ -780,6 +827,9 @@ def game(ws, game_id):
                     })
 
             elif data['type'] == 'resolve-land':
+                if game._locked():
+                    _send(ws, 'update', game, {'success': False, 'info': 'A sorcery is resolving'})
+                    continue
                 slot = data['slot']
                 target = data['target']
                 card = game.hands[user_id][slot]
