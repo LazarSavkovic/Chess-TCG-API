@@ -761,6 +761,7 @@ def game(ws, game_id):
                     })
 
             elif data['type'] == 'activate-sorcery':
+                ts = time.time()  # ← add this
                 print(f"[WS] {ts:.6f} ACT conn_id={ws._id} user={user_id} slot={data.get('slot')} pos={data.get('pos')} ixn={bool(game.interaction)}")
 
                 if not user_id: continue
