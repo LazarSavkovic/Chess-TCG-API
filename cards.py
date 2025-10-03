@@ -1149,3 +1149,219 @@ class RiteOfReclamation(Sorcery):
                 pool.pop(i)
                 game.hands[user_id].append(c)
                 break
+
+
+# --- COMPLEX MULTI-STEP SORCERIES -------------------------------------------
+
+class CircleOfRebirth(Sorcery):
+    name = "Circle of Rebirth"
+    text = "Discard 2 cards; destroy enemy land; summon monster from graveyard; heal all your monsters for 30."
+    activation_needs = ["forward", "back"]
+    role = "white"
+    
+    def __init__(self, owner):
+        super().__init__('circle_of_rebirth', owner, image='/static/cards/circle_of_rebirth.png', mana=4)
+    
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="discard_from_hand", owner="self", zone="hand", as_key="discard1"),
+            StepSpec(kind="discard_from_hand", owner="self", zone="hand", as_key="discard2"),
+            StepSpec(kind="select_land_target", owner="opponent", zone="land", as_key="land_pos"),
+            StepSpec(kind="apply_effect", apply_method="do_destroy_land"),
+            StepSpec(kind="select_graveyard_card", owner="self", zone="graveyard",
+                     filter={"type": "monster"}, as_key="summon_monster"),
+            StepSpec(kind="select_board_target", owner="self", zone="board", 
+                     filter={"require_monster": False}, as_key="summon_pos"),
+            StepSpec(kind="apply_effect", apply_method="do_summon"),
+            StepSpec(kind="apply_effect", apply_method="do_heal_all")
+        ]
+    
+    def do_destroy_land(self, game, _pos, user_id):
+        x, y = game.interaction.temp["land_pos"]
+        game.land_board[x][y] = None
+    
+    def do_summon(self, game, _pos, user_id):
+        monster_id = game.interaction.temp["summon_monster"]
+        monster_pos = game.interaction.temp["summon_pos"]
+        
+        # Find and remove monster from graveyard
+        pool = game.graveyard[user_id]
+        for i, c in enumerate(pool):
+            if c.id == monster_id:
+                monster = pool.pop(i)
+                break
+        else:
+            return  # Monster not found
+        
+        # Place on empty board position
+        x, y = monster_pos
+        x, y = int(x), int(y)
+        if not game.board[x][y]:
+            game.board[x][y] = monster
+    
+    def do_heal_all(self, game, _pos, user_id):
+        for row in game.board:
+            for card in row:
+                if card and card.owner == user_id and hasattr(card, 'defense'):
+                    card.defense += 30
+
+
+class VoidNexusRitual(Sorcery):
+    name = "Void Nexus Ritual"
+    text = "Sacrifice monster; discard sorcery; destroy enemy monster; steal opponent's next draw."
+    activation_needs = ["left", "right"]
+    role = "black"
+    
+    def __init__(self, owner):
+        super().__init__('void_nexus_ritual', owner, image='/static/cards/void_nexus_ritual.png', mana=5)
+    
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_board_target", owner="self", zone="board",
+                     filter={"require_monster": True}, as_key="sacrifice_monster"),
+            StepSpec(kind="apply_effect", apply_method="do_sacrifice"),
+            StepSpec(kind="discard_from_hand", owner="self", zone="hand", as_key="discard_sorcery"),
+            StepSpec(kind="discard_from_hand", owner="self", zone="hand", as_key="discard_sorcery2"),
+            StepSpec(kind="select_board_target", owner="opponent", zone="board",
+                     filter={"require_enemy": True, "require_monster": True}, as_key="destroy_target"),
+            StepSpec(kind="apply_effect", apply_method="do_destroy_enemy"),
+            StepSpec(kind="apply_effect", apply_method="do_steal_next_draw")
+        ]
+    
+    def do_sacrifice(self, game, _pos, user_id):
+        x, y = game.interaction.temp["sacrifice_monster"]
+        card = game.board[x][y]
+        if card and card.owner == user_id:
+            game.graveyard[user_id].append(card)
+            game.board[x][y] = None
+    
+    def do_destroy_enemy(self, game, _pos, user_id):
+        x, y = game.interaction.temp["destroy_target"]
+        target = game.board[x][y]
+        if target:
+            game.graveyard[target.owner].append(target)
+            game.board[x][y] = None
+    
+    def do_steal_next_draw(self, game, _pos, user_id):
+        opponent_id = '2' if user_id == '1' else '1'
+        if game.decks[opponent_id]:
+            stolen_card = game.decks[opponent_id].pop(0)
+            game.hands[user_id].append(stolen_card)
+
+
+class ElementalConvergence(Sorcery):
+    name = "Elemental Convergence"
+    text = "Choose monster; sacrifice land; summon monster from deck; boost all monsters of same role."
+    activation_needs = ["forward", "left", "right"]
+    role = "blue"
+    
+    def __init__(self, owner):
+        super().__init__('elemental_convergence', owner, image='/static/cards/elemental_convergence.png', mana=6)
+    
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_board_target", owner="any", zone="board",
+                     filter={"require_monster": True}, as_key="target_monster"),
+            StepSpec(kind="select_land_target", owner="self", zone="land", as_key="sacrifice_land"),
+            StepSpec(kind="apply_effect", apply_method="do_destroy_owner_land"),
+            StepSpec(kind="select_deck_card", owner="self", zone="deck",
+                     filter={"type": "monster", "max_cost": 3}, as_key="summon_elemental"),
+            StepSpec(kind="select_board_target", owner="self", zone="board", 
+                     filter={"require_monster": False}, as_key="place_elemental"),
+            StepSpec(kind="apply_effect", apply_method="do_summon_elemental"),
+            StepSpec(kind="apply_effect", apply_method="do_boost_role_mates")
+        ]
+    
+    def do_destroy_owner_land(self, game, _pos, user_id):
+        x, y = game.interaction.temp["sacrifice_land"]
+        if game.land_board[x][y]:
+            game.land_board[x][y] = None
+    
+    def do_summon_elemental(self, game, _pos, user_id):
+        elemental_id = game.interaction.temp["summon_elemental"]
+        elemental_pos = game.interaction.temp["place_elemental"]
+        
+        # Find and remove elemental from deck
+        deck = game.decks[user_id]
+        for i, c in enumerate(deck):
+            if c.id == elemental_id:
+                elemental = deck.pop(i)
+                break
+        else:
+            return  # Elemental not found
+        
+        # Place on empty board position
+        x, y = elemental_pos
+        x, y = int(x), int(y)
+        if not game.board[x][y]:
+            game.board[x][y] = elemental
+    
+    def do_boost_role_mates(self, game, _pos, user_id):
+        # Get role of the original target monster
+        monster_pos = game.interaction.temp["target_monster"]
+        mx, my = monster_pos
+        target_monster = game.board[int(mx)][int(my)]
+        
+        if not target_monster or not hasattr(target_monster, 'role'):
+            return
+            
+        role_to_boost = target_monster.role
+        
+        # Boost all monsters of the same role on the board
+        for row in game.board:
+            for card in row:
+                if (card and hasattr(card, 'role') and 
+                    card.role == role_to_boost and hasattr(card, 'attack')):
+                    card.attack += 25
+                    if hasattr(card, 'defense'):
+                        card.defense += 15
+
+
+class BurningSacrifice(Sorcery):
+    name = "Burning Sacrifice"
+    text = "Sacrifice monster; steal monster from deck; destroy enemy land."
+    activation_needs = ["forward", "right"]
+    role = "red"
+    
+    def __init__(self, owner):
+        super().__init__('burning_sacrifice', owner, image='/static/cards/burning_sacrifice.png', mana=3)
+    
+    def script(self, game, user_id):
+        return [
+            StepSpec(kind="select_board_target", owner="self", zone="board",
+                     filter={"require_monster": True}, as_key="sacrifice_target"),
+            StepSpec(kind="apply_effect", apply_method="do_sacrifice_monster"),
+            StepSpec(kind="select_deck_card", owner="opponent", zone="deck",
+                     filter={"type": "monster", "min_cost": 2}, as_key="steal_monster"),
+            StepSpec(kind="apply_effect", apply_method="do_steal_to_hand"),
+            StepSpec(kind="select_land_target", owner="opponent", zone="land", as_key="destroy_land"),
+            StepSpec(kind="apply_effect", apply_method="do_destroy_land_effect")
+        ]
+    
+    def do_sacrifice_monster(self, game, _pos, user_id):
+        x, y = game.interaction.temp["sacrifice_target"]
+        card = game.board[x][y]
+        if card and card.owner == user_id:
+            # Gain 1 mana for sacrifice
+            game.mana[user_id] = game.mana.get(user_id, 0) + 1
+            game.graveyard[user_id].append(card)
+            game.board[x][y] = None
+    
+    def do_steal_to_hand(self, game, _pos, user_id):
+        monster_id = game.interaction.temp["steal_monster"]
+        opponent_id = '2' if user_id == '1' else '1'
+        
+        # Find and steal from opponent's deck
+        deck = game.decks[opponent_id]
+        for i, c in enumerate(deck):
+            if c.id == monster_id and hasattr(c, 'mana') and c.mana >= 2:
+                stolen_monster = deck.pop(i)
+                game.hands[user_id].append(stolen_monster)
+                break
+    
+    def do_destroy_land_effect(self, game, _pos, user_id):
+        x, y = game.interaction.temp["destroy_land"]
+        if game.land_board[x][y]:
+            game.land_board[x][y] = None
+            # Gain 1 mana for destroying enemy land
+            game.mana[user_id] = game.mana.get(user_id, 0) + 1
